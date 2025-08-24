@@ -9,11 +9,12 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "baseUrl": "./",
+  "typeRoots": ["./types", "./node_modules/@types"],
     "paths": {
       "/*": ["src/*"],
       "/src/*": ["src/*"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "types/**/*"],
   "exclude": ["node_modules", "dist"]
 }

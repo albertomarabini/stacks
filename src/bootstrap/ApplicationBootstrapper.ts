@@ -204,6 +204,11 @@ export class ApplicationBootstrapper {
 
     // 12) Listen
     const port = Number(process.env.PORT ?? 3000);
-    app.listen(port);
+    app.listen(port, () => {
+      // give a simple stdout hint so the developer knows the server bound successfully
+      // and can open the browser — helpful when running via ts-node
+      // eslint-disable-next-line no-console
+      console.log(`Server listening on http://localhost:${port}`);
+    });
   }
 }
