@@ -1,0 +1,15 @@
+[project]
+name = "sbtc-gateway"
+requirements = []
+description = "BTCPay-like sBTC payments: invoices + subs"
+authors = ["you"]
+
+[contracts.sbtc-payment]
+path = "contracts/sbtc-payment.clar"
+clarity_version = 2
+epoch = 2.5
+
+[contracts.mock-sbtc-token]
+path = "contracts/mock-sbtc-token.clar"
+clarity_version = 2
+epoch = 2.5

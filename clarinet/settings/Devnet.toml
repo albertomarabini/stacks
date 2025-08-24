@@ -1,0 +1,6 @@
+[network]
+name = "devnet"
+rpc_host = "127.0.0.1"
+rpc_port = 20443
+# Optional:
+# events_observer = "http://127.0.0.1:20445"

@@ -1,0 +1,24 @@
+// src/config/env.ts
+
+import type { IConfigSnapshot } from '../contracts/state';
+
+export function loadEnvSnapshot(): IConfigSnapshot {
+  return Object.freeze({
+    network: (process.env.STACKS_NETWORK as any) ?? 'testnet',
+    contractAddress: String(process.env.CONTRACT_ADDRESS),
+    contractName: String(process.env.CONTRACT_NAME),
+    sbtcContract:
+      process.env.SBTC_CONTRACT_ADDRESS && process.env.SBTC_CONTRACT_NAME
+        ? {
+            contractAddress: String(process.env.SBTC_CONTRACT_ADDRESS),
+            contractName: String(process.env.SBTC_CONTRACT_NAME),
+          }
+        : undefined,
+    avgBlockSecs: Number(process.env.AVG_BLOCK_SECONDS ?? 30),
+    minConfirmations: Number(process.env.MIN_CONFIRMATIONS ?? 2),
+    reorgWindowBlocks: Number(process.env.REORG_WINDOW_BLOCKS ?? 6),
+    pollIntervalSecs: Number(process.env.POLL_INTERVAL_SECS ?? 30),
+    priceApiUrl: process.env.PRICE_API_URL ? String(process.env.PRICE_API_URL) : undefined,
+    autoBroadcast: String(process.env.AUTO_BROADCAST ?? 'false') === 'true',
+  });
+}
