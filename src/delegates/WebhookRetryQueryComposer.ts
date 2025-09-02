@@ -1,5 +1,5 @@
 // src/delegates/WebhookRetryQueryComposer.ts
-import type { WebhookEventType } from '/src/contracts/domain';
+import type { WebhookEventType } from '../contracts/domain';
 
 export type ComposedQuery = { sql: string; params: any[] };
 

@@ -1,6 +1,6 @@
-// /frontend/merchant-dashboard/profile/StoreProfileCoordinator.ts
+// ../merchant-dashboard/profile/StoreProfileCoordinator.ts
 import { StorePrivateProfileDTO } from '/src/contracts/domain';
-import type { MerchantApiHttpClient } from '/frontend/merchant-dashboard/http/MerchantApiHttpClient';
+import type { MerchantApiHttpClient } from '../http/MerchantApiHttpClient';
 
 export class StoreProfileCoordinator {
   private profile?: StorePrivateProfileDTO;

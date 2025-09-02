@@ -1,7 +1,7 @@
 // src/delegates/InvoiceEventApplier.ts
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { IWebhookDispatcher } from '/src/contracts/interfaces';
-import type { NormalizedEvent, InvoiceStatus } from '/src/contracts/domain';
+import type { ISqliteStore } from '../contracts/dao';
+import type { IWebhookDispatcher } from '../contracts/interfaces';
+import type { NormalizedEvent, InvoiceStatus } from '../contracts/domain';
 
 export class InvoiceEventApplier {
   constructor(private store: ISqliteStore, private dispatcher: IWebhookDispatcher) {}

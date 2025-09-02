@@ -1,4 +1,4 @@
-// /frontend/merchant-dashboard/http/MerchantApiHttpClient.ts
+// ../merchant-dashboard/http/MerchantApiHttpClient.ts
 
 export class MerchantApiHttpClient {
   private storeId = '';

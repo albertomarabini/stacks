@@ -1,4 +1,4 @@
-// /frontend/admin-console/adapters/AdminStoreFormAdapter.ts
+// ../admin-console/adapters/AdminStoreFormAdapter.ts
 
 export class AdminStoreFormAdapter {
   static toCreateStoreBody(form: {

@@ -1,4 +1,4 @@
-// /frontend/admin-console/wallet/AdminContractCallSequencer.ts
+// ../admin-console/wallet/AdminContractCallSequencer.ts
 
 export class AdminContractCallSequencer {
   static async runSequential(

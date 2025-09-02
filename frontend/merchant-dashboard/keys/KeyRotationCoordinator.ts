@@ -1,5 +1,5 @@
-// /frontend/merchant-dashboard/keys/KeyRotationCoordinator.ts
-import type { MerchantApiHttpClient } from '/frontend/merchant-dashboard/http/MerchantApiHttpClient';
+// ../merchant-dashboard/keys/KeyRotationCoordinator.ts
+import type { MerchantApiHttpClient } from '../http/MerchantApiHttpClient';
 
 export class KeyRotationCoordinator {
   private oneTimeSecrets: { apiKey: string; hmacSecret: string } | null = null;

@@ -13,7 +13,11 @@ CREATE TABLE IF NOT EXISTS merchants (
   support_email TEXT,
   support_url TEXT,
   allowed_origins TEXT,
-  created_at INTEGER
+  created_at INTEGER,
+  keys_rotation_version INTEGER NOT NULL DEFAULT 0,
+  keys_last_rotated_at INTEGER,
+  keys_last_revealed_at INTEGER,
+  keys_dual_valid_until INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ux_merchants_principal ON merchants(principal);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_merchants_api_key ON merchants(api_key);
@@ -78,3 +82,12 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
   last_attempt_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_webhooks_store ON webhook_logs(store_id);
+
+
+      CREATE TABLE IF NOT EXISTS poller_cursor (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        last_run_at INTEGER NOT NULL,
+        last_height INTEGER NOT NULL CHECK (last_height >= 0),
+        last_txid TEXT,
+        last_block_hash TEXT
+      );

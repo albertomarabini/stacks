@@ -1,18 +1,18 @@
 // src/controllers/PublicApiController.ts
 import type { Request, Response } from 'express';
-import type { ISqliteStore } from '/src/contracts/dao';
+import type { ISqliteStore } from '../contracts/dao';
 import type {
   IStacksChainClient,
   IContractCallBuilder,
   IAssetInfoFactory,
   IConfigService,
   IInvoiceIdCodec,
-} from '/src/contracts/interfaces';
-import type { PublicInvoiceDTO } from '/src/contracts/domain';
-import { InvoiceIdGuard } from '/src/delegates/InvoiceIdGuard';
-import { InvoiceStatusResolver } from '/src/delegates/InvoiceStatusResolver';
-import { StorePublicProfileProjector } from '/src/delegates/StorePublicProfileProjector';
-import { PayInvoiceTxAssembler, HttpError } from '/src/delegates/PayInvoiceTxAssembler';
+} from '../contracts/interfaces';
+import type { PublicInvoiceDTO } from '../contracts/domain';
+import { InvoiceIdGuard } from '../delegates/InvoiceIdGuard';
+import { InvoiceStatusResolver } from '../delegates/InvoiceStatusResolver';
+import { StorePublicProfileProjector } from '../delegates/StorePublicProfileProjector';
+import { PayInvoiceTxAssembler, HttpError } from '../delegates/PayInvoiceTxAssembler';
 
 const HttpStatusMap = {
   invalidPayload: 400,

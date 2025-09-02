@@ -1,20 +1,20 @@
 // src/poller/PaymentPoller.ts
-import type { ISqliteStore } from '/src/contracts/dao';
+import type { ISqliteStore } from '../contracts/dao';
 import type {
   IStacksChainClient,
   IConfigService,
   IWebhookDispatcher,
-} from '/src/contracts/interfaces';
+} from '../contracts/interfaces';
 import type {
   PollerMetrics,
   NormalizedEvent,
   InvoiceStatus,
-} from '/src/contracts/domain';
-import { ContractCallEventNormalizer } from '/src/delegates/ContractCallEventNormalizer';
-import { ReorgGuard } from '/src/delegates/ReorgGuard';
-import { SubscriptionLifecycleProcessor } from '/src/delegates/SubscriptionLifecycleProcessor';
-import { InvoiceEventApplier } from '/src/delegates/InvoiceEventApplier';
-import { ExpirationMonitor } from '/src/services/ExpirationMonitor';
+} from '../contracts/domain';
+import { ContractCallEventNormalizer } from '../delegates/ContractCallEventNormalizer';
+import { ReorgGuard } from '../delegates/ReorgGuard';
+import { SubscriptionLifecycleProcessor } from '../delegates/SubscriptionLifecycleProcessor';
+import { InvoiceEventApplier } from '../delegates/InvoiceEventApplier';
+import { ExpirationMonitor } from '../services/ExpirationMonitor';
 
 type CursorState = {
   lastHeight: number;
@@ -223,7 +223,7 @@ export class PaymentPoller {
       return;
     }
     if (e.type === 'invoice-canceled') {
-      await this.onInvoiceCanceled(e);
+      await this.invoiceApplier.handleCanceled(e);
       return;
     }
   }

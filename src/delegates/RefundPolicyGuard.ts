@@ -1,7 +1,7 @@
 // src/delegates/RefundPolicyGuard.ts
-import type { IInvoiceIdCodec } from '/src/contracts/interfaces';
-import { RefundService } from '/src/services/RefundService';
-import type { MerchantRow, InvoiceRow, UnsignedContractCall } from '/src/contracts/domain';
+import type { IInvoiceIdCodec } from '../contracts/interfaces';
+import { RefundService } from '../services/RefundService';
+import type { MerchantRow, InvoiceRow, UnsignedContractCall } from '../contracts/domain';
 
 export class RefundPolicyGuard {
   constructor(private readonly codec: IInvoiceIdCodec, private readonly refund: RefundService) {}

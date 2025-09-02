@@ -1,18 +1,18 @@
 // src/services/SubscriptionService.ts
 import crypto from 'crypto';
-import type { ISqliteStore } from '/src/contracts/dao';
+import type { ISqliteStore } from '../contracts/dao';
 import type {
   IContractCallBuilder,
   IStacksChainClient,
   IConfigService,
   IInvoiceIdCodec,
-} from '/src/contracts/interfaces';
+} from '../contracts/interfaces';
 import { PricingService } from './PricingService';
 import type {
   SubscriptionRow,
   PublicInvoiceDTO,
   UnsignedContractCall,
-} from '/src/contracts/domain';
+} from '../contracts/domain';
 
 type CreateSubInput = {
   subscriber: string;
@@ -55,7 +55,7 @@ export class SubscriptionService {
     const tip = await this.chain.getTip();
     const nextInvoiceAt = tip.height + body.intervalBlocks;
     const mode = body.mode ?? 'invoice';
-
+    
     const row: SubscriptionRow = {
       id,
       id_hex: idHex,

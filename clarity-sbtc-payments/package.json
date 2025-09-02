@@ -1,0 +1,30 @@
+{
+  "name": "clarity-sbtc-payments-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/quick-sim.mjs",
+    "tesnet": "node ./scripts/run.mjs testnet",
+    "devnet": "node ./scripts/run.mjs devnet",
+    "simnet": "node ./scripts/run.mjs simnet",
+    "devnet_start":"../bin/clarinet devnet start",
+    "devnet_reset":"sudo ./scripts/devnet_reset.sh",
+    "accounts":"../bin/clarinet console"
+  },
+  "devDependencies": {
+    "@hirosystems/clarinet-sdk": "^3.5.0",
+    "@stacks/transactions": "^7.2.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "@stacks/auth": "^7.2.0",
+    "@stacks/blockchain-api-client": "^8.12.1",
+    "@stacks/encryption": "^7.2.0",
+    "@stacks/network": "^7.2.0",
+    "@stacks/profile": "^7.2.0",
+    "@stacks/storage": "^7.2.0",
+    "@stacks/wallet-sdk": "^7.2.0"
+  }
+}

@@ -1,18 +1,20 @@
 // src/controllers/AdminApiController.ts
 import type { Request, Response } from 'express';
-import type { ISqliteStore } from '/src/contracts/dao';
+import type { ISqliteStore } from '../contracts/dao';
+import { randomBytes } from "node:crypto";
 import type {
   IStacksChainClient,
   IContractCallBuilder,
   IWebhookDispatcher,
-} from '/src/contracts/interfaces';
-import { PollerAdminBridge } from '/src/poller/PollerAdminBridge';
-import { AdminParamGuard } from '/src/delegates/AdminParamGuard';
-import { AdminDtoProjector } from '/src/delegates/AdminDtoProjector';
-import { MerchantKeyRotationService } from '/src/delegates/MerchantKeyRotationService';
-import { MerchantOnchainSyncPlanner } from '/src/delegates/MerchantOnchainSyncPlanner';
-import { WebhookAdminRetryService } from '/src/delegates/WebhookAdminRetryService';
-import { MerchantCreationService } from '/src/delegates/MerchantCreationService';
+} from '../contracts/interfaces';
+import { PollerAdminBridge } from '../poller/PollerAdminBridge';
+import { AdminParamGuard } from '../delegates/AdminParamGuard';
+import { AdminDtoProjector } from '../delegates/AdminDtoProjector';
+import { MerchantKeyRotationService } from '../delegates/MerchantKeyRotationService';
+import { MerchantOnchainSyncPlanner } from '../delegates/MerchantOnchainSyncPlanner';
+import { WebhookAdminRetryService } from '../delegates/WebhookAdminRetryService';
+import { MerchantCreationService } from '../delegates/MerchantCreationService';
+import type { InvoiceStatus } from '../contracts/domain';
 
 type Deps = {
   store: ISqliteStore;
@@ -45,14 +47,35 @@ export class AdminApiController {
   }
 
   async createStore(req: Request, res: Response): Promise<void> {
-    const principal = String((req.body || {}).principal ?? '');
-    this.paramGuard.assertStacksPrincipal(principal);
-    const result = await this.merchantCreation.create(this.store, { ...req.body, principal });
-    if (result.status === 'conflict') {
-      res.status(409).end();
-      return;
+    try {
+      const body = (req.body && typeof req.body === 'object') ? req.body : {};
+      const principal = String(body.principal ?? '').trim();
+      if (!principal) {
+        res.status(400).json({ error: 'principal-required' });
+        return;
+      }
+      try {
+        this.paramGuard.assertStacksPrincipal(principal);  // format check (SP… or ST…)
+      } catch {
+        res.status(400).json({ error: 'principal-invalid' });
+        return;
+      }
+      const result = await this.merchantCreation.create(this.store, { ...body, principal });
+      if (result.status === 'conflict') {
+        res.status(409).end();
+        return;
+      }
+      res.status(201).json(result.dto);
+    } catch (err: any) {
+      const msg = String(err?.message || "");
+      // Handle re-runs: UNIQUE(principal) constraint → return HTTP 409 (idempotent create)
+      if (err?.code === "SQLITE_CONSTRAINT_UNIQUE" && msg.includes("merchants.principal")) {
+        res.status(409).json({ error: "principal-already-exists" });
+        return;
+      }
+      // Not a duplicate-principal error → let your global error middleware handle it
+      throw err;
     }
-    res.status(201).json(result.dto);
   }
 
   async listStores(_req: Request, res: Response): Promise<void> {
@@ -60,16 +83,41 @@ export class AdminApiController {
     res.json(rows.map((r) => this.projector.merchantToDto(r)));
   }
 
-  async rotateKeys(req: Request, res: Response): Promise<void> {
-    const storeId = String(req.params.storeId);
-    this.paramGuard.assertUuid(storeId);
-    const result = this.keyRotation.rotate(this.store, storeId);
-    if (!result.ok) {
-      res.status(404).end();
-      return;
-    }
-    res.json({ apiKey: result.apiKey, hmacSecret: result.hmacSecret });
+
+// POST /api/admin/stores/:storeId/rotate-keys
+async rotateKeys(req: Request, res: Response): Promise<void> {
+  const storeId = String(req.params.storeId ?? '');
+  const m = this.store.getMerchantById(storeId);
+  if (!m) { res.status(404).json({ error: 'store-not-found' }); return; }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // Guard: do NOT rotate again immediately → prevents re-exposure on a 2nd call
+  // (tune the 60s if you need a different idempotency window)
+  const lastRotated = m.keys_last_rotated_at ?? 0;
+  if (now - lastRotated < 60) {
+    res.status(409).json({ error: 'already-rotated' });
+    return;
   }
+
+  // Generate fresh secrets
+  const apiKey = randomBytes(32).toString('hex');
+  const hmacSecret = randomBytes(32).toString('hex');
+
+  // Persist: bump version + timestamp
+  const version = this.store.rotateKeysPersist(storeId, apiKey, hmacSecret, now);
+
+  // One-time reveal for this version
+  const marked = this.store.markKeysRevealedOnce(storeId, version, now);
+  if (!marked) {
+    res.status(409).json({ error: 'already-revealed' });
+    return;
+  }
+
+  res.status(200).json({ apiKey, hmacSecret });
+}
+
+
 
   async syncOnchain(req: Request, res: Response): Promise<void> {
     const storeId = String(req.params.storeId);
@@ -149,8 +197,14 @@ export class AdminApiController {
   }
 
   async getPoller(_req: Request, res: Response): Promise<void> {
-    const state = this.pollerBridge.getState();
-    res.json(state);
+    const s = this.pollerBridge.getState();
+    res.json({
+      running: !!s.running,
+      lastRunAt: s.lastRunAt ?? null,
+      lastHeight: s.lastHeight ?? 0,
+      lastTxId: s.lastTxId ?? null,
+      lagBlocks: s.lagBlocks ?? null,
+    });
   }
 
   async restartPoller(_req: Request, res: Response): Promise<void> {
@@ -166,4 +220,21 @@ export class AdminApiController {
     const rows = this.store.listAdminWebhooks(storeId, failedOnly);
     res.json(rows.map((w) => this.projector.webhookToDto(w)));
   }
+
+  async listInvoices(req: Request, res: Response): Promise<void> {
+    const storeId = String((req.query || {}).storeId ?? '');
+    if (!storeId) { res.json([]); return; }
+    this.paramGuard.assertUuid(storeId);
+
+    const rawStatus = String((req.query || {}).status ?? '').trim();
+    const status = (rawStatus ? (rawStatus as InvoiceStatus) : undefined);
+
+    const rows = this.store.listInvoicesByStore(storeId, {
+      status,
+      orderByCreatedDesc: true,
+    });
+
+    res.json(rows.map(r => this.projector.invoiceToDto(r)));
+  }
+
 }

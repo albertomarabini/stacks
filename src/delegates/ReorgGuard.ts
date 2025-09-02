@@ -1,5 +1,5 @@
 // src/delegates/ReorgGuard.ts
-import type { IStacksChainClient } from '/src/contracts/interfaces';
+import type { IStacksChainClient } from '../contracts/interfaces';
 
 export type CursorSnapshot = { lastHeight: number; lastBlockHash?: string };
 

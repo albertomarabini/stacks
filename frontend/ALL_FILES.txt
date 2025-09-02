@@ -1,0 +1,2038 @@
+
+
+---
+# ./merchant-dashboard/flows/RefundFlowCoordinator.ts
+
+import { PublicInvoiceDTO, UnsignedContractCall } from '/src/contracts/domain';
+
+export type RefundDialogState = {
+  open: boolean;
+  invoice?: PublicInvoiceDTO;
+  amountSats?: number;
+  memo?: string;
+  error?: string | null;
+  submitting: boolean;
+  pending: boolean;
+};
+
+export class RefundFlowCoordinator {
+  public openDialog(invoice: PublicInvoiceDTO): RefundDialogState {
+    return {
+      open: true,
+      invoice,
+      amountSats: undefined,
+      memo: undefined,
+      error: null,
+      submitting: false,
+      pending: false,
+    };
+  }
+
+  public closeDialog(): RefundDialogState {
+    return { open: false, submitting: false, pending: false };
+  }
+
+  public async submit(
+    formEl: HTMLFormElement,
+    dialog: RefundDialogState,
+    storeId: string,
+    http: {
+      requestJson<T>(url: string, init: RequestInit & { expectJson?: boolean }, onAuthError: (e: unknown) => never): Promise<T>;
+      buildHeaders(hasJson: boolean, overrideApiKey?: string): HeadersInit;
+    },
+    onAuthError: (e: unknown) => never,
+    toSnake: (v: any) => any,
+  ): Promise<{ newState: RefundDialogState; unsignedCall?: UnsignedContractCall }> {
+    if (!dialog.invoice) throw new Error('No invoice selected for refund.');
+    const fd = new FormData(formEl);
+    const amountSats = parseInt(String(fd.get('amountSats') ?? '0'), 10);
+    const memo = fd.get('memo') ? String(fd.get('memo')) : undefined;
+
+    const refunded = dialog.invoice.refundAmount ?? 0;
+    const cap = dialog.invoice.amountSats - refunded;
+
+    if (!Number.isInteger(amountSats) || amountSats <= 0) {
+      return { newState: { ...dialog, error: 'Amount must be > 0.' } };
+    }
+    if (amountSats > cap) {
+      return { newState: { ...dialog, error: `Amount exceeds refundable cap (${cap}).` } };
+    }
+    if (memo) {
+      const bytes = new TextEncoder().encode(memo);
+      if (bytes.length > 34) {
+        return { newState: { ...dialog, error: 'Memo must be ≤ 34 bytes.' } };
+      }
+    }
+
+    const body = toSnake({ invoiceId: dialog.invoice.invoiceId, amountSats, memo });
+
+    const res = await fetch(`/api/v1/stores/${encodeURIComponent(storeId)}/refunds`, {
+      method: 'POST',
+      headers: http.buildHeaders(true),
+      body: JSON.stringify(body),
+    });
+
+    if (res.status === 401 || res.status === 403) onAuthError(res);
+
+    let json: any = {};
+    try {
+      json = await res.json();
+    } catch {}
+
+    if (json?.error === 'insufficient_balance') {
+      return { newState: { ...dialog, error: 'Insufficient merchant sBTC balance.' } };
+    }
+
+    const unsignedCall = json as UnsignedContractCall;
+    const newState: RefundDialogState = { ...dialog, submitting: true, error: null };
+    return { newState, unsignedCall };
+  }
+
+  public invokeWallet(
+    payload: UnsignedContractCall,
+    handlers: { onFinish: (tx?: unknown) => void; onCancel: () => void },
+  ): void {
+    const anyWin = window as any;
+    if (!anyWin || typeof anyWin.openContractCall !== 'function') {
+      throw new Error('openContractCall is not available on window.');
+    }
+    anyWin.openContractCall({
+      ...payload,
+      onFinish: handlers.onFinish,
+      onCancel: handlers.onCancel,
+    });
+  }
+
+  public onFinish(dialog: RefundDialogState): { newState: RefundDialogState; shouldRefetch: boolean } {
+    return { newState: { ...dialog, pending: true }, shouldRefetch: true };
+  }
+
+  public onCancel(dialog: RefundDialogState): RefundDialogState {
+    return { ...dialog, submitting: false };
+  }
+}
+
+
+---
+# ./merchant-dashboard/profile/StoreProfileCoordinator.ts
+
+// ../merchant-dashboard/profile/StoreProfileCoordinator.ts
+import { StorePrivateProfileDTO } from '/src/contracts/domain';
+import type { MerchantApiHttpClient } from '../http/MerchantApiHttpClient';
+
+export class StoreProfileCoordinator {
+  private profile?: StorePrivateProfileDTO;
+
+  public setProfileLocal(profile?: StorePrivateProfileDTO): void {
+    this.profile = profile;
+  }
+
+  public async save(
+    formEl: HTMLFormElement,
+    storeId: string,
+    http: MerchantApiHttpClient,
+    onAuthError: (e: unknown) => never,
+    toSnake: (v: any) => any,
+  ): Promise<StorePrivateProfileDTO> {
+    const fd = new FormData(formEl);
+    const name = fd.get('name') ? String(fd.get('name')) : undefined;
+    const displayName = fd.get('displayName') ? String(fd.get('displayName')) : undefined;
+    const logoUrl = fd.get('logoUrl') ? String(fd.get('logoUrl')) : undefined;
+    const brandColor = fd.get('brandColor') ? String(fd.get('brandColor')) : undefined;
+    const webhookUrl = fd.get('webhookUrl') ? String(fd.get('webhookUrl')) : undefined;
+    const supportEmail = fd.get('supportEmail') ? String(fd.get('supportEmail')) : undefined;
+    const supportUrl = fd.get('supportUrl') ? String(fd.get('supportUrl')) : undefined;
+    const allowedOriginsRaw = fd.get('allowedOrigins') ? String(fd.get('allowedOrigins')) : '';
+    const allowedOrigins = allowedOriginsRaw.split('\n').map((s) => s.trim()).filter(Boolean);
+
+    const body = toSnake({
+      name,
+      displayName,
+      logoUrl,
+      brandColor,
+      webhookUrl,
+      supportEmail,
+      supportUrl,
+      allowedOrigins: allowedOrigins.join(','),
+    });
+
+    const prof = await http.requestJson<StorePrivateProfileDTO>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/profile`,
+      { method: 'PATCH', headers: http.buildHeaders(true), body: JSON.stringify(body) },
+      onAuthError,
+    );
+    this.profile = prof;
+    return prof;
+  }
+}
+
+
+---
+# ./merchant-dashboard/viewmodels/InvoiceListViewModel.ts
+
+// ../merchant-dashboard/viewmodels/InvoiceListViewModel.ts
+import { PublicInvoiceDTO, InvoiceStatus } from '/src/contracts/domain';
+
+export class InvoiceListViewModel {
+  private invoices: PublicInvoiceDTO[] = [];
+  private filtered: PublicInvoiceDTO[] = [];
+  private sortDirection: 'asc' | 'desc' = 'desc';
+
+  public setData(invoices: PublicInvoiceDTO[], filtered: PublicInvoiceDTO[], sortDir: 'asc' | 'desc'): void {
+    this.invoices = [...invoices];
+    this.filtered = [...filtered];
+    this.sortDirection = sortDir;
+  }
+
+  public updateAfterCreate(created: PublicInvoiceDTO): { invoices: PublicInvoiceDTO[]; filtered: PublicInvoiceDTO[] } {
+    const exists = this.invoices.find((i) => i.invoiceId === created.invoiceId);
+    const nextInvoices = exists
+      ? this.invoices.map((i) => (i.invoiceId === created.invoiceId ? created : i))
+      : [created, ...this.invoices];
+    const nextFiltered = [created, ...this.filtered];
+    return { invoices: nextInvoices, filtered: this.sort(nextFiltered, this.sortDirection) };
+  }
+
+  public setStatus(invoiceId: string, status: InvoiceStatus): { invoices: PublicInvoiceDTO[]; filtered: PublicInvoiceDTO[] } {
+    const mapStatus = (arr: PublicInvoiceDTO[]) => arr.map((i) => (i.invoiceId === invoiceId ? { ...i, status } : i));
+    const invoices = mapStatus(this.invoices);
+    const filtered = mapStatus(this.filtered);
+    return { invoices, filtered };
+  }
+
+  public applyFilter(value: InvoiceStatus | 'all'): { filtered: PublicInvoiceDTO[] } {
+    const filtered = value === 'all' ? [...this.invoices] : this.invoices.filter((i) => i.status === value);
+    return { filtered: this.sort(filtered, this.sortDirection) };
+  }
+
+  public sortByCreatedAt(direction: 'asc' | 'desc'): { filtered: PublicInvoiceDTO[] } {
+    this.sortDirection = direction;
+    return { filtered: this.sort([...this.filtered], direction) };
+  }
+
+  public toggleSort(): 'asc' | 'desc' {
+    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    return this.sortDirection;
+  }
+
+  public toCsv(rows: Array<{ invoiceId: string; amountSats: number; usdAtCreate: number; status: InvoiceStatus; txId?: string; createdAt: number; refundAmount?: number | string; refundTxId?: string }>): string {
+    const headers = ['invoiceId', 'amountSats', 'usdAtCreate', 'status', 'txId', 'createdAt', 'refundAmount', 'refundTxId'];
+    const escape = (v: unknown) => {
+      const s = v === undefined || v === null ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [
+      headers.join(','),
+      ...rows.map((r) =>
+        [
+          escape(r.invoiceId),
+          escape(r.amountSats),
+          escape(r.usdAtCreate),
+          escape(r.status),
+          escape(r.txId ?? ''),
+          escape(r.createdAt),
+          escape(r.refundAmount ?? ''),
+          escape(r.refundTxId ?? ''),
+        ].join(','),
+      ),
+    ];
+    return lines.join('\n');
+  }
+
+  public exportCsv(rows: Array<{ invoiceId: string; amountSats: number; usdAtCreate: number; status: InvoiceStatus; txId?: string; createdAt: number; refundAmount?: number | string; refundTxId?: string }>): void {
+    const csv = this.toCsv(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'invoices.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  private sort(arr: PublicInvoiceDTO[], direction: 'asc' | 'desc'): PublicInvoiceDTO[] {
+    const mult = direction === 'asc' ? 1 : -1;
+    return arr.sort((a, b) => (a.createdAt - b.createdAt) * mult);
+  }
+}
+
+
+---
+# ./merchant-dashboard/keys/KeyRotationCoordinator.ts
+
+// ../merchant-dashboard/keys/KeyRotationCoordinator.ts
+import type { MerchantApiHttpClient } from '../http/MerchantApiHttpClient';
+
+export class KeyRotationCoordinator {
+  private oneTimeSecrets: { apiKey: string; hmacSecret: string } | null = null;
+
+  public async rotate(
+    storeId: string,
+    http: MerchantApiHttpClient,
+    onAuthError: (e: unknown) => never,
+  ): Promise<{ apiKey: string; hmacSecret: string }> {
+    const secrets = await http.requestJson<{ apiKey: string; hmacSecret: string }>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/rotate-keys`,
+      { method: 'POST', headers: http.buildHeaders(false) },
+      onAuthError,
+    );
+    return secrets;
+  }
+
+  public show(secrets: { apiKey: string; hmacSecret: string }): { apiKey: string; hmacSecret: string } {
+    this.oneTimeSecrets = secrets;
+    return secrets;
+  }
+
+  public clear(): null {
+    this.oneTimeSecrets = null;
+    return this.oneTimeSecrets;
+  }
+
+  public get(): { apiKey: string; hmacSecret: string } | null {
+    return this.oneTimeSecrets;
+  }
+}
+
+
+---
+# ./merchant-dashboard/MerchantDashboardFrontend.ts
+
+// ../merchant-dashboard/MerchantDashboardFrontend.ts
+import { RequestShapeAdapter } from '../merchant-dashboard/adapters/RequestShapeAdapter';
+import { MerchantApiHttpClient } from '../merchant-dashboard/http/MerchantApiHttpClient';
+import { RefundFlowCoordinator } from '../merchant-dashboard/flows/RefundFlowCoordinator';
+import { InvoiceListViewModel } from '../merchant-dashboard/viewmodels/InvoiceListViewModel';
+import { SubscriptionsCoordinator } from '../merchant-dashboard/subscriptions/SubscriptionsCoordinator';
+import { WebhookConsoleCoordinator } from '../merchant-dashboard/webhooks/WebhookConsoleCoordinator';
+import { StoreProfileCoordinator } from '../merchant-dashboard/profile/StoreProfileCoordinator';
+import { KeyRotationCoordinator } from '../merchant-dashboard/keys/KeyRotationCoordinator';
+import {
+  PublicInvoiceDTO,
+  StorePrivateProfileDTO,
+  SubscriptionMode,
+  InvoiceStatus,
+  UnsignedContractCall,
+} from '../../src/contracts/domain';
+
+type SubscriptionItem = {
+  id: string;
+  subscriber: string;
+  amountSats: number;
+  intervalBlocks: number;
+  active: boolean;
+  nextInvoiceAt: number;
+  lastBilledAt?: number;
+  mode: SubscriptionMode;
+};
+
+type OneTimeSecrets = { apiKey: string; hmacSecret: string };
+
+type DashboardState = {
+  storeId: string;
+  apiKey: string;
+  invoices: PublicInvoiceDTO[];
+  filteredInvoices: PublicInvoiceDTO[];
+  invoiceDetail?: PublicInvoiceDTO;
+  subscriptions: SubscriptionItem[];
+  profile?: StorePrivateProfileDTO;
+  webhookLogs: any[];
+  testResult?: 'success' | 'failure';
+  refundDialog?: any;
+  oneTimeSecrets?: OneTimeSecrets | null;
+  sortDirection: 'asc' | 'desc';
+  refetchKey: number;
+  authError: boolean;
+};
+
+const requestShapeAdapter = new RequestShapeAdapter();
+const http = new MerchantApiHttpClient();
+const refundFlow = new RefundFlowCoordinator();
+const listVm = new InvoiceListViewModel();
+const subsCoord = new SubscriptionsCoordinator();
+const webhookCoord = new WebhookConsoleCoordinator();
+const storeProfileCoord = new StoreProfileCoordinator();
+const keyRotator = new KeyRotationCoordinator();
+
+export const state: DashboardState = {
+  storeId: '',
+  apiKey: '',
+  invoices: [],
+  filteredInvoices: [],
+  subscriptions: [],
+  webhookLogs: [],
+  sortDirection: 'desc',
+  refetchKey: 0,
+  authError: false,
+};
+
+export async function handleCreateInvoice(e: React.FormEvent<HTMLFormElement>): Promise<void> {
+  e.preventDefault();
+  const fd = new FormData(e.currentTarget);
+  const amountSats = parseInt(String(fd.get('amountSats') ?? '0'), 10);
+  const ttlSeconds = parseInt(String(fd.get('ttlSeconds') ?? '0'), 10);
+  const memo = fd.get('memo') ? String(fd.get('memo')) : undefined;
+  const webhookUrl = fd.get('webhookUrl') ? String(fd.get('webhookUrl')) : undefined;
+
+  if (!Number.isInteger(amountSats) || amountSats <= 0) {
+    throw new Error('amount_sats must be > 0');
+  }
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+    throw new Error('ttl_seconds must be > 0');
+  }
+  if (memo) {
+    const bytes = new TextEncoder().encode(memo);
+    if (bytes.length > 34) throw new Error('memo must be ≤ 34 bytes (UTF-8).');
+  }
+
+  http.setContext({ storeId: state.storeId, apiKey: state.apiKey });
+  const body = requestShapeAdapter.toSnake({ amountSats, ttlSeconds, memo, webhookUrl });
+  const created = await http.requestJson<PublicInvoiceDTO>(
+    `/api/v1/stores/${state.storeId}/invoices`,
+    { method: 'POST', headers: http.buildHeaders(true), body: JSON.stringify(body) },
+    onErrorAuthGate,
+  );
+
+  listVm.setData(state.invoices, state.filteredInvoices, state.sortDirection);
+  const { invoices, filtered } = listVm.updateAfterCreate(created);
+  state.invoices = invoices;
+  state.filteredInvoices = filtered;
+  state.refetchKey++;
+}
+
+export function toSnake<T extends Record<string, any>>(camel: T): Record<string, any> {
+  return requestShapeAdapter.toSnake(camel);
+}
+
+export function updateInvoicesList(created: PublicInvoiceDTO): void {
+  listVm.setData(state.invoices, state.filteredInvoices, state.sortDirection);
+  const { invoices, filtered } = listVm.updateAfterCreate(created);
+  state.invoices = invoices;
+  state.filteredInvoices = filtered;
+}
+
+export async function onCancelInvoice(invoiceId: string): Promise<void> {
+  http.setContext({ storeId: state.storeId, apiKey: state.apiKey });
+  await http.requestJson<void>(
+    `/api/v1/stores/${state.storeId}/invoices/${invoiceId}/cancel`,
+    { method: 'POST', headers: http.buildHeaders(false), expectJson: false as any } as any,
+    onErrorAuthGate,
+  );
+  setInvoiceStatus(invoiceId, 'canceled');
+  state.refetchKey++;
+}
+
+export function setInvoiceStatus(invoiceId: string, statusValue: InvoiceStatus): void {
+  listVm.setData(state.invoices, state.filteredInvoices, state.sortDirection);
+  const { invoices, filtered } = listVm.setStatus(invoiceId, statusValue);
+  state.invoices = invoices;
+  state.filteredInvoices = filtered;
+}
+
+export function openRefundDialog(invoice: PublicInvoiceDTO): void {
+  state.refundDialog = refundFlow.openDialog(invoice);
+}
+
+export async function handleRefundSubmit(e: React.FormEvent<HTMLFormElement>): Promise<void> {
+  e.preventDefault();
+  const { newState, unsignedCall } = await refundFlow.submit(
+    e.currentTarget as HTMLFormElement,
+    state.refundDialog,
+    state.storeId,
+    http as any,
+    onErrorAuthGate,
+    requestShapeAdapter.toSnake.bind(requestShapeAdapter),
+  );
+  state.refundDialog = newState;
+  if (unsignedCall) {
+    refundFlow.invokeWallet(unsignedCall, {
+      onFinish: (tx?: unknown) => onRefundTxFinish(tx),
+      onCancel: () => onRefundTxCancel(),
+    });
+  }
+}
+
+export async function invokeWalletOpenContractCall(payload: UnsignedContractCall): Promise<void> {
+  refundFlow.invokeWallet(payload, {
+    onFinish: (tx?: unknown) => onRefundTxFinish(tx),
+    onCancel: () => onRefundTxCancel(),
+  });
+}
+
+export function onRefundTxFinish(_tx?: unknown): void {
+  const out = refundFlow.onFinish(state.refundDialog);
+  state.refundDialog = out.newState;
+  if (out.shouldRefetch) state.refetchKey++;
+}
+
+export function onRefundTxCancel(): void {
+  state.refundDialog = refundFlow.onCancel(state.refundDialog);
+}
+
+export function closeRefundDialog(): void {
+  state.refundDialog = refundFlow.closeDialog();
+}
+
+export async function handleCreateSubscription(e: React.FormEvent<HTMLFormElement>): Promise<void> {
+  e.preventDefault();
+  subsCoord.setData(state.subscriptions);
+  const out = await subsCoord.create(
+    e.currentTarget as HTMLFormElement,
+    state.storeId,
+    http as any,
+    onErrorAuthGate,
+    requestShapeAdapter.toSnake.bind(requestShapeAdapter),
+  );
+  state.subscriptions = out.newList as SubscriptionItem[];
+  state.refetchKey++;
+}
+
+export function validatePrincipal(address: string): boolean {
+  return subsCoord.validatePrincipal(address);
+}
+
+export async function generateInvoiceForSubscription(id: string): Promise<void> {
+  subsCoord.setData(state.subscriptions);
+  const { invoice } = await subsCoord.generateInvoice(id, state.storeId, http as any, onErrorAuthGate);
+  state.subscriptions = subsCoord.associateInvoiceToSub(id, invoice) as SubscriptionItem[];
+  state.refetchKey++;
+  listVm.setData(state.invoices, state.filteredInvoices, state.sortDirection);
+  const { invoices, filtered } = listVm.updateAfterCreate(invoice);
+  state.invoices = invoices;
+  state.filteredInvoices = filtered;
+}
+
+export function associateInvoiceToSubscription(subId: string, invoice: PublicInvoiceDTO): void {
+  subsCoord.setData(state.subscriptions);
+  state.subscriptions = subsCoord.associateInvoiceToSub(subId, invoice) as SubscriptionItem[];
+  listVm.setData(state.invoices, state.filteredInvoices, state.sortDirection);
+  const { invoices, filtered } = listVm.updateAfterCreate(invoice);
+  state.invoices = invoices;
+  state.filteredInvoices = filtered;
+}
+
+export async function cancelSubscription(id: string): Promise<void> {
+  subsCoord.setData(state.subscriptions);
+  state.subscriptions = (await subsCoord.cancel(id, state.storeId, http as any, onErrorAuthGate)) as SubscriptionItem[];
+  state.refetchKey++;
+}
+
+export function setSubscriptionActive(id: string, active: boolean): void {
+  subsCoord.setData(state.subscriptions);
+  state.subscriptions = subsCoord.setActive(id, active) as SubscriptionItem[];
+}
+
+export async function handleSaveStoreSettings(e: React.FormEvent<HTMLFormElement>): Promise<void> {
+  e.preventDefault();
+  storeProfileCoord.setProfileLocal(state.profile);
+  const prof = await storeProfileCoord.save(
+    e.currentTarget as HTMLFormElement,
+    state.storeId,
+    http as any,
+    onErrorAuthGate,
+    requestShapeAdapter.toSnake.bind(requestShapeAdapter),
+  );
+  setProfile(prof);
+}
+
+export function setProfile(profile: StorePrivateProfileDTO): void {
+  storeProfileCoord.setProfileLocal(profile);
+  state.profile = profile;
+}
+
+export async function testWebhook(): Promise<void> {
+  webhookCoord.setData(state.webhookLogs as any[], state.testResult);
+  const res = await webhookCoord.test(state.storeId, http as any, onErrorAuthGate);
+  state.testResult = res;
+  state.webhookLogs = await webhookCoord.fetchLogs(state.storeId, http as any, onErrorAuthGate);
+}
+
+export function setTestResult(result: 'success' | 'failure'): void {
+  webhookCoord.setData(state.webhookLogs as any[], state.testResult);
+  state.testResult = webhookCoord.setTestResult(result);
+}
+
+export async function fetchWebhookLogs(invoiceIdFilter?: string): Promise<void> {
+  webhookCoord.setData(state.webhookLogs as any[], state.testResult);
+  state.webhookLogs = await webhookCoord.fetchLogs(state.storeId, http as any, onErrorAuthGate, invoiceIdFilter);
+}
+
+export async function rotateKeys(): Promise<void> {
+  const secrets = await keyRotator.rotate(state.storeId, http as any, onErrorAuthGate);
+  state.oneTimeSecrets = keyRotator.show(secrets);
+}
+
+export function showOneTimeSecretsModal(secrets: { apiKey: string; hmacSecret: string }): void {
+  state.oneTimeSecrets = keyRotator.show(secrets);
+}
+
+export function clearOneTimeSecrets(): void {
+  state.oneTimeSecrets = keyRotator.clear();
+}
+
+export function toggleSort(field: 'createdAt'): void {
+  if (field !== 'createdAt') return;
+  listVm.setData(state.invoices, state.filteredInvoices, state.sortDirection);
+  const newDir = listVm.toggleSort();
+  state.sortDirection = newDir;
+  state.filteredInvoices = listVm.sortByCreatedAt(newDir).filtered;
+}
+
+export function sortInvoicesByCreatedAt(direction: 'asc' | 'desc'): void {
+  listVm.setData(state.invoices, state.filteredInvoices, state.sortDirection);
+  const { filtered } = listVm.sortByCreatedAt(direction);
+  state.filteredInvoices = filtered;
+}
+
+export function applyInvoiceStatusFilter(value: InvoiceStatus | 'all'): void {
+  listVm.setData(state.invoices, state.filteredInvoices, state.sortDirection);
+  const { filtered } = listVm.applyFilter(value);
+  listVm.setData(state.invoices, filtered, state.sortDirection);
+  state.filteredInvoices = listVm.sortByCreatedAt(state.sortDirection).filtered;
+}
+
+export function setFilteredInvoices(list: PublicInvoiceDTO[]): void {
+  state.filteredInvoices = list;
+}
+
+export function exportCsv(): void {
+  const rows = state.filteredInvoices.map((i) => ({
+    invoiceId: i.invoiceId,
+    amountSats: i.amountSats,
+    usdAtCreate: i.usdAtCreate,
+    status: i.status,
+    txId: i.txId ?? '',
+    createdAt: i.createdAt,
+    refundAmount: i.refundAmount ?? '',
+    refundTxId: i.refundTxId ?? '',
+  }));
+  listVm.exportCsv(rows as any);
+}
+
+export function toCsv(rows: Array<{ invoiceId: string; amountSats: number; usdAtCreate: number; status: InvoiceStatus; txId?: string; createdAt: number; refundAmount?: number; refundTxId?: string }>): string {
+  return listVm.toCsv(rows as any);
+}
+
+export function openInExplorer(txId: string): void {
+  if (!txId) throw new Error('txId required');
+  const base =
+    (window as any).__EXPLORER_BASE_URL__ ??
+    ((typeof process !== 'undefined' && (process as any).env && (process as any).env.EXPLORER_BASE_URL) || '');
+  const url = `${String(base)}/txid/${encodeURIComponent(txId)}`;
+  window.open(url, '_blank', 'noopener');
+}
+
+export async function fetchInvoices(
+  storeId: string,
+  apiKey: string,
+  options?: { status?: InvoiceStatus; signal?: AbortSignal },
+): Promise<PublicInvoiceDTO[]> {
+  http.setContext({ storeId, apiKey });
+  const q = options?.status ? `?status=${encodeURIComponent(options.status)}` : '';
+  const rows = await http.requestJson<PublicInvoiceDTO[]>(
+    `/api/v1/stores/${storeId}/invoices${q}`,
+    { headers: http.buildHeaders(false), signal: options?.signal },
+    onErrorAuthGate,
+  );
+  state.invoices = rows;
+  state.filteredInvoices = rows;
+  sortInvoicesByCreatedAt(state.sortDirection);
+  return rows;
+}
+
+export function onErrorAuthGate(error: unknown): never {
+  const status = (error as any)?.response?.status ?? (error as any)?.status;
+  if (status === 401 || status === 403) {
+    state.authError = true;
+  }
+  throw error as any;
+}
+
+export async function fetchInvoice(
+  storeId: string,
+  invoiceId: string,
+  apiKey: string,
+  options?: { signal?: AbortSignal },
+): Promise<PublicInvoiceDTO> {
+  http.setContext({ storeId, apiKey });
+  const dto = await http.requestJson<PublicInvoiceDTO>(
+    `/api/v1/stores/${storeId}/invoices/${invoiceId}`,
+    { headers: http.buildHeaders(false), signal: options?.signal },
+    onErrorAuthGate,
+  );
+  state.invoiceDetail = dto;
+  return dto;
+}
+
+export async function fetchSubscriptions(
+  storeId: string,
+  apiKey: string,
+  options?: { signal?: AbortSignal },
+): Promise<
+  Array<{
+    id: string;
+    subscriber: string;
+    amountSats: number;
+    intervalBlocks: number;
+    active: boolean;
+    nextInvoiceAt: number;
+    lastBilledAt?: number;
+    mode: SubscriptionMode;
+  }>
+> {
+  http.setContext({ storeId, apiKey });
+  const rows = await http.requestJson<
+    Array<{ id: string; subscriber: string; amountSats: number; intervalBlocks: number; active: boolean; nextInvoiceAt: number; lastBilledAt?: number; mode: SubscriptionMode }>
+  >(`/api/v1/stores/${storeId}/subscriptions`, { headers: http.buildHeaders(false), signal: options?.signal }, onErrorAuthGate);
+  state.subscriptions = rows as SubscriptionItem[];
+  return rows;
+}
+
+export async function fetchStoreProfile(
+  storeId: string,
+  apiKey: string,
+  options?: { signal?: AbortSignal },
+): Promise<StorePrivateProfileDTO> {
+  http.setContext({ storeId, apiKey });
+  const prof = await http.requestJson<any>(
+    `/api/v1/stores/${storeId}/profile`,
+    { headers: http.buildHeaders(false), signal: options?.signal },
+    onErrorAuthGate,
+  );
+
+  const normalizeAllowed = (v: unknown): string[] => {
+    if (Array.isArray(v)) return v.filter(Boolean).map((s) => String(s).trim()).filter((s) => s.length > 0);
+    if (typeof v === 'string') {
+      return v.split(/[\n,]/g).map((s) => s.trim()).filter((s) => s.length > 0);
+    }
+    return [];
+  };
+  prof.allowedOrigins = normalizeAllowed(prof.allowedOrigins);
+
+  storeProfileCoord.setProfileLocal(prof as StorePrivateProfileDTO);
+  state.profile = prof as StorePrivateProfileDTO;
+  return prof as StorePrivateProfileDTO;
+}
+
+export async function refetch(ctx: {
+  view: 'invoices' | 'invoice' | 'subscriptions' | 'webhooks';
+  storeId: string;
+  apiKey: string;
+  invoiceId?: string;
+  invoiceIdFilter?: string;
+  signal?: AbortSignal;
+}): Promise<void> {
+  switch (ctx.view) {
+    case 'invoices':
+      await fetchInvoices(ctx.storeId, ctx.apiKey, { signal: ctx.signal });
+      break;
+    case 'invoice':
+      if (!ctx.invoiceId) throw new Error('invoiceId required for view=invoice');
+      await fetchInvoice(ctx.storeId, ctx.invoiceId, ctx.apiKey, { signal: ctx.signal });
+      break;
+    case 'subscriptions':
+      await fetchSubscriptions(ctx.storeId, ctx.apiKey, { signal: ctx.signal });
+      break;
+    case 'webhooks':
+      await fetchWebhookLogs(ctx.invoiceIdFilter);
+      break;
+    default:
+      return;
+  }
+
+  const inv =
+    state.invoiceDetail ??
+    (ctx.invoiceId ? state.invoices.find((i) => i.invoiceId === ctx.invoiceId) : undefined);
+  if (state.refundDialog?.pending && inv) {
+    const refunded = !!inv.refundTxId || inv.status === 'refunded';
+    if (refunded) state.refundDialog = refundFlow.closeDialog();
+  }
+}
+
+export async function setSubscriptionMode(
+  storeId: string,
+  subId: string,
+  mode: SubscriptionMode,
+  apiKey: string,
+): Promise<{ id: string; mode: SubscriptionMode }> {
+  http.setContext({ storeId, apiKey });
+  subsCoord.setData(state.subscriptions);
+  const resp = await subsCoord.setMode(storeId, subId, mode, http as any, onErrorAuthGate);
+  state.subscriptions = resp.newList as SubscriptionItem[];
+  state.refetchKey++;
+  return resp.confirmed;
+}
+
+
+---
+# ./merchant-dashboard/http/MerchantApiHttpClient.ts
+
+// ../merchant-dashboard/http/MerchantApiHttpClient.ts
+
+export class MerchantApiHttpClient {
+  private storeId = '';
+  private apiKey = '';
+
+  public setContext(ctx: { storeId: string; apiKey: string }): void {
+    this.storeId = ctx.storeId;
+    this.apiKey = ctx.apiKey;
+  }
+
+  public buildHeaders(hasJson: boolean, overrideApiKey?: string): HeadersInit {
+    return {
+      ...(hasJson ? { 'Content-Type': 'application/json' } : {}),
+      'X-API-Key': overrideApiKey ?? this.apiKey,
+    };
+  }
+
+  public async requestJson<T>(
+    url: string,
+    init: RequestInit & { expectJson?: boolean } = {},
+    onAuthError: (e: unknown) => never,
+  ): Promise<T> {
+    const res = await fetch(url, init);
+    if (res.status === 401 || res.status === 403) {
+      onAuthError(res);
+    }
+    if ((init as any).expectJson === false) {
+      return undefined as unknown as T;
+    }
+    const data = (await res.json()) as T;
+    return data;
+  }
+}
+
+
+---
+# ./merchant-dashboard/adapters/RequestShapeAdapter.ts
+
+// frontend/merchant-dashboard/adapters/RequestShapeAdapter.ts
+
+export class RequestShapeAdapter {
+  public toSnake<T extends Record<string, any>>(camel: T): Record<string, any> {
+    const out: Record<string, any> = {};
+    for (const [key, value] of Object.entries(camel)) {
+      const snake = key
+        .replace(/([A-Z])/g, '_$1')
+        .replace(/__/g, '_')
+        .toLowerCase();
+      out[snake] = value;
+    }
+    return out;
+  }
+}
+
+
+---
+# ./merchant-dashboard/subscriptions/SubscriptionsCoordinator.ts
+
+// ../merchant-dashboard/subscriptions/SubscriptionsCoordinator.ts
+import { PublicInvoiceDTO, SubscriptionMode } from '/src/contracts/domain';
+import type { MerchantApiHttpClient } from '../http/MerchantApiHttpClient';
+
+type SubItem = {
+  id: string;
+  subscriber: string;
+  amountSats: number;
+  intervalBlocks: number;
+  active: boolean;
+  nextInvoiceAt: number;
+  lastBilledAt?: number;
+  mode: SubscriptionMode;
+};
+
+export class SubscriptionsCoordinator {
+  private subs: SubItem[] = [];
+
+  public setData(subs: SubItem[]): void {
+    this.subs = [...subs];
+  }
+
+  public validatePrincipal(address: string): boolean {
+    return /^[ST][A-Za-z0-9]{20,}/.test(address);
+  }
+
+  public async create(
+    formEl: HTMLFormElement,
+    storeId: string,
+    http: MerchantApiHttpClient,
+    onAuthError: (e: unknown) => never,
+    toSnake: (v: any) => any,
+  ): Promise<{ newList: SubItem[] }> {
+    const fd = new FormData(formEl);
+    const subscriber = String(fd.get('subscriber') ?? '');
+    const amountSats = parseInt(String(fd.get('amountSats') ?? '0'), 10);
+    const intervalBlocks = parseInt(String(fd.get('intervalBlocks') ?? '0'), 10);
+    const mode = String(fd.get('mode') ?? 'invoice') as SubscriptionMode;
+
+    if (!this.validatePrincipal(subscriber)) throw new Error('Invalid subscriber principal.');
+    if (!Number.isInteger(amountSats) || amountSats <= 0) throw new Error('amount_sats must be > 0.');
+    if (!Number.isInteger(intervalBlocks) || intervalBlocks <= 0) throw new Error('interval_blocks must be > 0.');
+    if (!(mode === 'invoice' || mode === 'direct')) throw new Error('Invalid subscription mode.');
+
+    const body = toSnake({ subscriber, amountSats, intervalBlocks, mode });
+
+    const sub = await http.requestJson<{
+      id: string;
+      idHex: string;
+      storeId: string;
+      merchantPrincipal: string;
+      subscriber: string;
+      amountSats: number;
+      intervalBlocks: number;
+      active: boolean;
+      createdAt: number;
+      lastBilledAt?: number;
+      nextInvoiceAt: number;
+      lastPaidInvoiceId?: string;
+      mode: SubscriptionMode;
+    }>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/subscriptions`,
+      { method: 'POST', headers: http.buildHeaders(true), body: JSON.stringify(body) },
+      onAuthError,
+    );
+
+    const newItem: SubItem = {
+      id: sub.id,
+      subscriber: sub.subscriber,
+      amountSats: sub.amountSats,
+      intervalBlocks: sub.intervalBlocks,
+      active: sub.active,
+      nextInvoiceAt: sub.nextInvoiceAt,
+      lastBilledAt: sub.lastBilledAt,
+      mode: sub.mode,
+    };
+    return { newList: [newItem, ...this.subs] };
+  }
+
+  public async generateInvoice(
+    id: string,
+    storeId: string,
+    http: MerchantApiHttpClient,
+    onAuthError: (e: unknown) => never,
+  ): Promise<{ invoice: PublicInvoiceDTO }> {
+    const resp = await http.requestJson<{ invoice: PublicInvoiceDTO; magicLink: string }>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/subscriptions/${encodeURIComponent(id)}/invoice`,
+      { method: 'POST', headers: http.buildHeaders(true), body: JSON.stringify({}) },
+      onAuthError,
+    );
+    return { invoice: resp.invoice };
+  }
+
+  public associateInvoiceToSub(subId: string, invoice: PublicInvoiceDTO): SubItem[] {
+    return this.subs.map((s) => (s.id === subId ? { ...s, lastBilledAt: invoice.createdAt } : s));
+  }
+
+  public async cancel(
+    id: string,
+    storeId: string,
+    http: MerchantApiHttpClient,
+    onAuthError: (e: unknown) => never,
+  ): Promise<SubItem[]> {
+    await http.requestJson<void>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/subscriptions/${encodeURIComponent(id)}/cancel`,
+      { method: 'POST', headers: http.buildHeaders(true), expectJson: false as any } as any,
+      onAuthError,
+    );
+    return this.setActive(id, false);
+  }
+
+  public setActive(id: string, active: boolean): SubItem[] {
+    return this.subs.map((s) => (s.id === id ? { ...s, active } : s));
+  }
+
+  public async setMode(
+    storeId: string,
+    subId: string,
+    mode: SubscriptionMode,
+    http: MerchantApiHttpClient,
+    onAuthError: (e: unknown) => never,
+  ): Promise<{ newList: SubItem[]; confirmed: { id: string; mode: SubscriptionMode } }> {
+    if (!(mode === 'invoice' || mode === 'direct')) throw new Error('Invalid mode');
+    const confirmed = await http.requestJson<{ id: string; mode: SubscriptionMode }>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/subscriptions/${encodeURIComponent(subId)}/mode`,
+      { method: 'POST', headers: http.buildHeaders(true), body: JSON.stringify({ mode }) },
+      onAuthError,
+    );
+    const newList = this.subs.map((s) => (s.id === subId ? { ...s, mode: confirmed.mode } : s));
+    return { newList, confirmed };
+  }
+}
+
+
+---
+# ./merchant-dashboard/webhooks/WebhookConsoleCoordinator.ts
+
+// ../merchant-dashboard/webhooks/WebhookConsoleCoordinator.ts
+
+import type { MerchantApiHttpClient } from '../http/MerchantApiHttpClient';
+
+export interface WebhookLogDTO {
+  id: string;
+  storeId: string;
+  invoiceId?: string;
+  subscriptionId?: string;
+  eventType: string;
+  payload: string;
+  statusCode?: number;
+  success: boolean;
+  attempts: number;
+  lastAttemptAt: number;
+}
+
+export class WebhookConsoleCoordinator {
+  private logs: WebhookLogDTO[] = [];
+  private testResult?: 'success' | 'failure';
+
+  public setData(logs: WebhookLogDTO[], testResult?: 'success' | 'failure'): void {
+    this.logs = [...logs];
+    this.testResult = testResult;
+  }
+
+  public async test(
+    storeId: string,
+    http: MerchantApiHttpClient,
+    onAuthError: (e: unknown) => never,
+  ): Promise<'success' | 'failure'> {
+    const res = await fetch(`/api/v1/stores/${encodeURIComponent(storeId)}/webhooks/test`, {
+      method: 'POST',
+      headers: http.buildHeaders(false),
+    });
+    if (res.status === 401 || res.status === 403) onAuthError(res);
+    this.testResult = res.ok ? 'success' : 'failure';
+    return this.testResult;
+  }
+
+  public async fetchLogs(
+    storeId: string,
+    http: MerchantApiHttpClient,
+    onAuthError: (e: unknown) => never,
+    invoiceIdFilter?: string,
+  ): Promise<WebhookLogDTO[]> {
+    const q = invoiceIdFilter ? `?invoiceId=${encodeURIComponent(invoiceIdFilter)}` : '';
+    const rows = await http.requestJson<WebhookLogDTO[]>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/webhooks${q}`,
+      { headers: http.buildHeaders(false) },
+      onAuthError,
+    );
+    this.logs = rows.slice(0, 100);
+    return this.logs;
+  }
+
+  public setTestResult(result: 'success' | 'failure'): 'success' | 'failure' {
+    this.testResult = result;
+    return this.testResult;
+  }
+}
+
+
+---
+# ./checkout/CheckoutFrontend.ts
+
+// frontend/checkout/CheckoutFrontend.ts
+import { InvoiceCountdownDelegate } from '../checkout/delegates/InvoiceCountdownDelegate';
+import { InvoiceStatusPollerDelegate } from '../checkout/delegates/InvoiceStatusPollerDelegate';
+import { WalletContractCallDelegate } from '../checkout/delegates/WalletContractCallDelegate';
+import { StoreBrandingDelegate } from '../checkout/delegates/StoreBrandingDelegate';
+import { StatusBadgeDelegate } from '../checkout/delegates/StatusBadgeDelegate';
+import { PaymentActionsDelegate } from '../checkout/delegates/PaymentActionsDelegate';
+import { PublicCheckoutApiClient } from '../checkout/delegates/PublicCheckoutApiClient';
+import { QrRenderDelegate } from '../checkout/delegates/QrRenderDelegate';
+import { BannerDelegate } from '../checkout/delegates/BannerDelegate';
+import type { PublicInvoiceDTO, StorePublicProfileDTO, UnsignedContractCall, InvoiceStatus } from '/src/contracts/domain';
+
+const HIGHLIGHT_THRESHOLD_MS = 60_000;
+
+type UiState = {
+  invoice: PublicInvoiceDTO | null;
+  store: StorePublicProfileDTO | null;
+  loaderAbort: AbortController | null;
+};
+
+function extractInvoiceIdFromPath(path: string): string | null {
+  const m = path.match(/^\/i\/([^/]+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function show(selector: string): void {
+  const el = document.querySelector(selector) as HTMLElement | null;
+  if (el) el.removeAttribute('hidden');
+}
+
+function hide(selector: string): void {
+  const el = document.querySelector(selector) as HTMLElement | null;
+  if (el) el.setAttribute('hidden', 'true');
+}
+
+function wireOpenWalletButton(): void {
+  const btn = document.getElementById('openWallet') as HTMLButtonElement | null;
+  if (btn) {
+    btn.onclick = () => void CheckoutFrontend.onOpenWallet();
+    btn.removeAttribute('hidden');
+  }
+}
+
+export const CheckoutFrontend = {
+  state: {
+    invoice: null,
+    store: null,
+    loaderAbort: null,
+  } as UiState,
+
+  _countdown: new InvoiceCountdownDelegate({ highlightThresholdMs: HIGHLIGHT_THRESHOLD_MS }),
+  _poller: new InvoiceStatusPollerDelegate(),
+  _wallet: new WalletContractCallDelegate(),
+  _branding: new StoreBrandingDelegate(),
+  _badge: new StatusBadgeDelegate(),
+  _actions: new PaymentActionsDelegate(),
+  _api: new PublicCheckoutApiClient(),
+  _qr: new QrRenderDelegate(),
+  _banner: new BannerDelegate(),
+
+  async onRouteEnter(_evt?: Event): Promise<void> {
+    const invoiceId = extractInvoiceIdFromPath(location.pathname);
+    this.clearTimers();
+    this.resetUiState();
+    wireOpenWalletButton();
+    if (!invoiceId) {
+      this.renderNotFound();
+      return;
+    }
+    this.state.loaderAbort = new AbortController();
+    try {
+      const dto = await this.fetchInvoiceJson(invoiceId, { signal: this.state.loaderAbort.signal });
+      await this.handleInvoiceResponse(dto);
+    } catch (e: any) {
+      if (e && typeof e.status === 'number' && e.status === 404) {
+        this.renderNotFound();
+        return;
+      }
+      this.banner('Failed to load invoice', 'error');
+    }
+  },
+
+  clearTimers(): void {
+    this._countdown.stop();
+    this._poller.stop();
+  },
+
+  resetUiState(): void {
+    this.state.invoice = null;
+    this.state.store = null;
+
+    hide('#expiredView');
+
+    const badge = document.querySelector('#statusBadge') as HTMLElement | null;
+    if (badge) {
+      badge.className = 'badge';
+      badge.textContent = 'Loading…';
+    }
+
+    const banner = document.querySelector('#banner') as HTMLElement | null;
+    if (banner) banner.setAttribute('hidden', 'true');
+
+    const btn = document.getElementById('openWallet') as HTMLButtonElement | null;
+    if (btn) {
+      btn.disabled = false;
+      btn.removeAttribute('hidden');
+    }
+
+    const actions = document.querySelector('#actions') as HTMLElement | null;
+    if (actions) actions.removeAttribute('hidden');
+
+    const qr = document.querySelector('#qrCanvas') as HTMLCanvasElement | null;
+    if (qr) {
+      const ctx = qr.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, qr.width, qr.height);
+    }
+  },
+
+  async fetchInvoiceJson(invoiceId: string, opts?: { signal?: AbortSignal }): Promise<PublicInvoiceDTO> {
+    return this._api.fetchInvoiceJson(invoiceId, opts);
+  },
+
+  renderNotFound(): void {
+    this.disablePaymentActions();
+    const container = document.querySelector('#checkoutContainer') as HTMLElement | null;
+    if (container) {
+      container.innerHTML = '<div class="not-found">Invoice not found.</div>';
+    }
+  },
+
+  async onRouteChange(): Promise<void> {
+    const invoiceId = extractInvoiceIdFromPath(location.pathname);
+    this.clearTimers();
+    this.resetUiState();
+    if (this.state.loaderAbort) this.state.loaderAbort.abort();
+    wireOpenWalletButton();
+    if (!invoiceId) {
+      this.renderNotFound();
+      return;
+    }
+    this.state.loaderAbort = new AbortController();
+    try {
+      const dto = await this.fetchInvoiceJson(invoiceId, { signal: this.state.loaderAbort.signal });
+      await this.handleInvoiceResponse(dto);
+    } catch (e: any) {
+      if (e && typeof e.status === 'number' && e.status === 404) {
+        this.renderNotFound();
+        return;
+      }
+      this.banner('Failed to load invoice', 'error');
+    }
+  },
+
+  async handleInvoiceResponse(invoice: PublicInvoiceDTO): Promise<void> {
+    if (
+      !invoice ||
+      typeof invoice.invoiceId !== 'string' ||
+      typeof invoice.storeId !== 'string' ||
+      typeof invoice.status !== 'string' ||
+      !Number.isInteger(invoice.amountSats) ||
+      typeof invoice.quoteExpiresAt !== 'number' ||
+      typeof invoice.idHex !== 'string' ||
+      !/^[0-9A-Fa-f]{64}$/.test(invoice.idHex)
+    ) {
+      this.banner('Invalid invoice payload', 'error');
+      return;
+    }
+
+    this.state.invoice = invoice;
+    this.setStatusBadge(invoice.status as InvoiceStatus);
+
+    if (invoice.store) {
+      this.applyBranding(invoice.store);
+      this.state.store = invoice.store;
+    } else {
+      const profile = await this.fetchStorePublicProfile(invoice.storeId);
+      this.applyBranding(profile);
+      this.state.store = profile;
+    }
+
+    if (invoice.status === 'unpaid') {
+      this.renderQr(invoice.invoiceId);
+      show('#openWallet');
+      this.startCountdown(invoice.quoteExpiresAt);
+      this.startPoll(invoice.invoiceId, 15000);
+    } else {
+      this.disablePaymentActions();
+    }
+  },
+
+  setStatusBadge(status: InvoiceStatus): void {
+    this._badge.setStatusBadge(status, '#statusBadge');
+  },
+
+  async fetchStorePublicProfile(storeId: string, opts?: { signal?: AbortSignal }): Promise<StorePublicProfileDTO> {
+    return this._api.fetchStorePublicProfile(storeId, opts);
+  },
+
+  renderQr(invoiceId: string): void {
+    this._qr.renderInvoiceLink('#qrCanvas', invoiceId);
+  },
+
+  startCountdown(quoteExpiresAtMs: number): void {
+    this._countdown.start(
+      quoteExpiresAtMs,
+      (timeLeftMs) => this.renderCountdown(timeLeftMs),
+      () => {
+        this.setStatusBadge('expired');
+        this.disablePaymentActions();
+        show('#expiredView');
+      },
+    );
+  },
+
+  startPoll(invoiceId: string, intervalMs: number = 15000): void {
+    const client = this._api;
+    this._poller.start(
+      invoiceId,
+      intervalMs,
+      (id, signal) => client.fetchInvoiceJson(id, { signal }),
+      (dto) => this.handlePoll(dto),
+    );
+  },
+
+  disablePaymentActions(): void {
+    this._actions.disablePaymentActions();
+  },
+
+  applyBranding(profile: StorePublicProfileDTO): void {
+    this._branding.applyBranding(profile);
+  },
+
+  updateHeader(displayName?: string, logoUrl?: string): void {
+    this._branding.updateHeader(displayName, logoUrl);
+  },
+
+  async onOpenWallet(): Promise<void> {
+    const provider = this._wallet.getProvider();
+    if (!provider) {
+      this.banner('Wallet not connected', 'error');
+      return;
+    }
+    if (!this.state.invoice) return;
+    const res = await this.requestCreateTx(this.state.invoice.invoiceId);
+    await this.handleCreateTxResponse(res);
+  },
+
+  getStacksProvider(): (Window & typeof globalThis)['StacksProvider'] | null {
+    return this._wallet.getProvider();
+  },
+
+  async requestCreateTx(invoiceId: string): Promise<Response> {
+    return fetch('/create-tx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoiceId }),
+    });
+  },
+
+  banner(message: string, type: 'info' | 'success' | 'error' = 'info'): void {
+    this._banner.show(message, type, '#banner');
+  },
+
+  async handleCreateTxResponse(res: Response): Promise<void> {
+    if (res.ok) {
+      const payload = (await res.json()) as UnsignedContractCall;
+      await this.invokeWalletOpenContractCall(payload);
+      return;
+    }
+    switch (res.status) {
+      case 404:
+        this.banner('Invoice not found', 'error');
+        break;
+      case 409:
+        this.banner('Invoice cannot be paid (already paid, canceled, or expired)', 'error');
+        break;
+      case 400:
+        this.banner('Invalid invoice ID', 'error');
+        break;
+      case 422:
+        this.banner('Merchant inactive or sBTC token not configured', 'error');
+        break;
+      case 426:
+        this.banner('Wrong network selected in wallet', 'error');
+        break;
+      default:
+        this.banner('Failed to prepare transaction', 'error');
+    }
+  },
+
+  async invokeWalletOpenContractCall(payload: UnsignedContractCall): Promise<void> {
+    await this._wallet.openUnsignedContractCall(
+      payload as unknown as Record<string, any>,
+      (tx) => this.onTxFinish(tx),
+      () => this.onTxCancel(),
+    );
+  },
+
+  onTxFinish(tx?: unknown): void {
+    this._wallet.onFinish(this.banner.bind(this), () => this.disableOpenWallet(), tx);
+  },
+
+  disableOpenWallet(): void {
+    this._wallet.disableOpenWallet('#openWallet');
+  },
+
+  onTxCancel(): void {
+    this._wallet.onCancel(this.banner.bind(this));
+  },
+
+  handlePoll(fresh: PublicInvoiceDTO): void {
+    if (fresh.status === 'paid') {
+      this.setStatusBadge('paid');
+      this.banner('Payment confirmed', 'success');
+      this.disablePaymentActions();
+      this.clearTimers();
+      return;
+    }
+    if (fresh.status === 'expired' || fresh.status === 'canceled') {
+      this.setStatusBadge(fresh.status as InvoiceStatus);
+      this.disablePaymentActions();
+      this.clearTimers();
+    }
+  },
+
+  updateCountdown(): void {
+    this._countdown.forceTick();
+  },
+
+  renderCountdown(timeLeftMs: number): void {
+    const node = document.querySelector('#countdown') as HTMLElement | null;
+    if (!node) return;
+    const totalSeconds = Math.floor(timeLeftMs / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    node.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    if (timeLeftMs <= HIGHLIGHT_THRESHOLD_MS) node.classList.add('expiring');
+    else node.classList.remove('expiring');
+  },
+
+  handleExpiry(): void {
+    this._countdown.expireNow();
+  },
+
+  async pollStatus(): Promise<void> {
+    await this._poller.tick();
+  },
+};
+
+// Register global event listeners on module load
+document.addEventListener('DOMContentLoaded', () => {
+  void CheckoutFrontend.onRouteEnter();
+});
+
+window.addEventListener('popstate', () => {
+  void CheckoutFrontend.onRouteChange();
+});
+
+
+---
+# ./checkout/delegates/InvoiceStatusPollerDelegate.ts
+
+// frontend/checkout/delegates/InvoiceStatusPollerDelegate.ts
+
+export type InvoiceFetcher = (invoiceId: string, signal: AbortSignal) => Promise<any>;
+export type InvoiceHandler = (dto: any) => void;
+
+export class InvoiceStatusPollerDelegate {
+  private invoiceId: string | null = null;
+  private intervalMs = 15000;
+  private intervalId: number | undefined;
+  private abort: AbortController | null = null;
+  private fetcher: InvoiceFetcher | null = null;
+  private handler: InvoiceHandler | null = null;
+  private isPolling = false;
+
+  start(invoiceId: string, intervalMs: number, fetcher: InvoiceFetcher, handler: InvoiceHandler): void {
+    this.stop();
+    this.invoiceId = invoiceId;
+    this.intervalMs = intervalMs;
+    this.fetcher = fetcher;
+    this.handler = handler;
+    this.intervalId = window.setInterval(() => void this.tick(), this.intervalMs);
+  }
+
+  async tick(): Promise<void> {
+    if (!this.invoiceId || !this.fetcher || !this.handler) return;
+    if (this.abort) this.abort.abort();
+    this.abort = new AbortController();
+    this.isPolling = true;
+    try {
+      const dto = await this.fetcher(this.invoiceId, this.abort.signal);
+      this.handler(dto);
+    } catch {
+      // Silent failure; next tick will try again.
+    } finally {
+      this.isPolling = false;
+    }
+  }
+
+  stop(): void {
+    if (this.intervalId !== undefined) {
+      window.clearInterval(this.intervalId);
+      this.intervalId = undefined;
+    }
+    if (this.abort) {
+      this.abort.abort();
+      this.abort = null;
+    }
+    this.invoiceId = null;
+    this.fetcher = null;
+    this.handler = null;
+    this.isPolling = false;
+  }
+}
+
+
+---
+# ./checkout/delegates/PublicCheckoutApiClient.ts
+
+// ../checkout/delegates/PublicCheckoutApiClient.ts
+import { PublicInvoiceDTO, StorePublicProfileDTO } from '/src/contracts/domain';
+
+export class PublicCheckoutApiClient {
+  async fetchInvoiceJson(
+    invoiceId: string,
+    opts?: { signal?: AbortSignal }
+  ): Promise<PublicInvoiceDTO> {
+    const res = await fetch(`/i/${encodeURIComponent(invoiceId)}`, {
+      headers: { Accept: 'application/json' },
+      signal: opts?.signal,
+    });
+    if (!res.ok) {
+      const err: any = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return (await res.json()) as PublicInvoiceDTO;
+  }
+
+  async fetchStorePublicProfile(
+    storeId: string,
+    opts?: { signal?: AbortSignal }
+  ): Promise<StorePublicProfileDTO> {
+    const res = await fetch(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/public-profile`,
+      {
+        headers: { Accept: 'application/json' },
+        signal: opts?.signal,
+      }
+    );
+    if (!res.ok) return {} as StorePublicProfileDTO;
+    return (await res.json()) as StorePublicProfileDTO;
+  }
+}
+
+
+---
+# ./checkout/delegates/StoreBrandingDelegate.ts
+
+import type { StorePublicProfileDTO } from '/src/contracts/domain';
+
+export class StoreBrandingDelegate {
+  applyBranding(profile: StorePublicProfileDTO): void {
+    if (profile.brandColor) {
+      document.documentElement.style.setProperty('--accent', profile.brandColor);
+    }
+    this.updateHeader(profile.displayName, profile.logoUrl);
+  }
+
+  updateHeader(displayName?: string, logoUrl?: string): void {
+    const nameEl = document.querySelector('#storeName') as HTMLElement | null;
+    const logoEl = document.querySelector('#storeLogo') as HTMLImageElement | null;
+
+    if (nameEl) nameEl.textContent = displayName ?? '';
+
+    if (logoUrl && logoEl) {
+      logoEl.src = logoUrl;
+      logoEl.alt = displayName ? `${displayName} logo` : 'Store logo';
+      logoEl.removeAttribute('hidden');
+    } else if (logoEl) {
+      logoEl.removeAttribute('src');
+      logoEl.alt = 'Store logo';
+      logoEl.setAttribute('hidden', 'true');
+    }
+  }
+}
+
+
+---
+# ./checkout/delegates/WalletContractCallDelegate.ts
+
+export type BannerFn = (message: string, type?: 'info' | 'success' | 'error') => void;
+
+export class WalletContractCallDelegate {
+  getProvider(): (Window & typeof globalThis)['StacksProvider'] | null {
+    return (window as any).StacksProvider || null;
+  }
+
+  async openUnsignedContractCall(
+    payload: Record<string, any>,
+    onFinish: (tx?: unknown) => void,
+    onCancel: () => void
+  ): Promise<void> {
+    const openContractCall = (window as any).openContractCall;
+    await openContractCall({ ...payload, onFinish, onCancel });
+  }
+
+  onFinish(notify: BannerFn, afterFinish: () => void, _tx?: unknown): void {
+    notify('Payment submitted', 'success');
+    afterFinish();
+  }
+
+  onCancel(notify: BannerFn): void {
+    notify('User rejected transaction', 'info');
+  }
+
+  disableOpenWallet(selector = '#openWallet'): void {
+    const btn = document.querySelector(selector) as HTMLButtonElement | null;
+    if (btn) btn.disabled = true;
+  }
+}
+
+
+---
+# ./checkout/delegates/QrRenderDelegate.ts
+
+// frontend/checkout/delegates/QrRenderDelegate.ts
+
+export class QrRenderDelegate {
+  renderInvoiceLink(canvasSelector: string, invoiceId: string): void {
+    const canvas = document.querySelector(canvasSelector) as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const link = `${location.protocol}//${location.host}/i/${encodeURIComponent(invoiceId)}`;
+    ctx.fillStyle = '#000000';
+    ctx.font = '14px monospace';
+    ctx.fillText('Scan link:', 10, 20);
+    ctx.fillText(link, 10, 40);
+  }
+}
+
+
+---
+# ./checkout/delegates/BannerDelegate.ts
+
+// frontend/checkout/delegates/BannerDelegate.ts
+
+export class BannerDelegate {
+  show(
+    message: string,
+    type: 'info' | 'success' | 'error' = 'info',
+    selector: string = '#banner',
+  ): void {
+    const node = document.querySelector(selector) as HTMLElement | null;
+    if (!node) return;
+    node.textContent = message;
+    node.className = 'banner';
+    node.classList.add(`banner-${type}`);
+    node.removeAttribute('hidden');
+  }
+}
+
+
+---
+# ./checkout/delegates/StatusBadgeDelegate.ts
+
+// frontend/checkout/delegates/StatusBadgeDelegate.ts
+import type { InvoiceStatus } from '/src/contracts/domain';
+
+export class StatusBadgeDelegate {
+  setStatusBadge(status: InvoiceStatus, selector: string = '#statusBadge'): void {
+    const badge = document.querySelector(selector) as HTMLElement;
+
+    badge.className = 'badge';
+    switch (status) {
+      case 'unpaid':
+        badge.classList.add('badge-unpaid');
+        badge.textContent = 'Unpaid';
+        break;
+      case 'paid':
+        badge.classList.add('badge-paid');
+        badge.textContent = 'Paid';
+        break;
+      case 'partially_refunded':
+        badge.classList.add('badge-partial');
+        badge.textContent = 'Partially Refunded';
+        break;
+      case 'refunded':
+        badge.classList.add('badge-refunded');
+        badge.textContent = 'Refunded';
+        break;
+      case 'canceled':
+        badge.classList.add('badge-canceled');
+        badge.textContent = 'Canceled';
+        break;
+      case 'expired':
+        badge.classList.add('badge-expired');
+        badge.textContent = 'Expired';
+        break;
+    }
+    badge.setAttribute('aria-live', 'polite');
+  }
+}
+
+
+---
+# ./checkout/delegates/InvoiceCountdownDelegate.ts
+
+// frontend/checkout/delegates/InvoiceCountdownDelegate.ts
+
+export type CountdownTick = (timeLeftMs: number) => void;
+
+export class InvoiceCountdownDelegate {
+  private quoteExpiresAtMs: number | null = null;
+  private readonly highlightThresholdMs: number;
+  private intervalId: number | undefined;
+  private expiredHandled = false;
+  private readonly now: () => number;
+  private onTick: CountdownTick | null = null;
+  private onExpire: (() => void) | null = null;
+
+  constructor(opts?: { highlightThresholdMs?: number; now?: () => number }) {
+    this.highlightThresholdMs = opts?.highlightThresholdMs ?? 60_000;
+    this.now = opts?.now ?? (() => Date.now());
+  }
+
+  start(quoteExpiresAtMs: number, onTick: CountdownTick, onExpire: () => void): void {
+    this.stop();
+    this.quoteExpiresAtMs = quoteExpiresAtMs;
+    this.onTick = onTick;
+    this.onExpire = onExpire;
+    this.expiredHandled = false;
+    this.intervalId = window.setInterval(() => this.tick(), 1000);
+    this.tick();
+  }
+
+  stop(): void {
+    if (this.intervalId !== undefined) {
+      window.clearInterval(this.intervalId);
+      this.intervalId = undefined;
+    }
+    this.onTick = null;
+    this.onExpire = null;
+    this.quoteExpiresAtMs = null;
+    this.expiredHandled = false;
+  }
+
+  forceTick(): void {
+    this.tick();
+  }
+
+  private computeTimeLeftMs(): number {
+    if (this.quoteExpiresAtMs === null) return 0;
+    return Math.max(0, this.quoteExpiresAtMs - this.now());
+  }
+
+  private tick(): void {
+    if (this.quoteExpiresAtMs === null) return;
+    const timeLeftMs = this.computeTimeLeftMs();
+    if (this.onTick) this.onTick(timeLeftMs);
+
+    if (timeLeftMs <= 0 && !this.expiredHandled) {
+      this.expiredHandled = true;
+      if (this.onExpire) this.onExpire();
+      if (this.intervalId !== undefined) {
+        window.clearInterval(this.intervalId);
+        this.intervalId = undefined;
+      }
+    }
+  }
+
+  expireNow(): void {
+    if (!this.expiredHandled) {
+      this.expiredHandled = true;
+      if (this.onExpire) this.onExpire();
+      if (this.intervalId !== undefined) {
+        window.clearInterval(this.intervalId);
+        this.intervalId = undefined;
+      }
+    }
+  }
+}
+
+
+---
+# ./checkout/delegates/PaymentActionsDelegate.ts
+
+// ../checkout/delegates/PaymentActionsDelegate.ts
+
+export class PaymentActionsDelegate {
+  disablePaymentActions(opts?: {
+    openWalletSelector?: string;
+    qrSelector?: string;
+    actionsSelector?: string;
+  }): void {
+    const openSel = opts?.openWalletSelector ?? '#openWallet';
+    const qrSel = opts?.qrSelector ?? '#qrCanvas';
+    const actionsSel = opts?.actionsSelector ?? '#actions';
+
+    const btn = document.querySelector(openSel) as HTMLButtonElement;
+    btn.disabled = true;
+
+    const qr = document.querySelector(qrSel) as HTMLElement;
+    qr.classList.add('disabled');
+
+    const actions = document.querySelector(actionsSel) as HTMLElement;
+    actions.setAttribute('hidden', 'true');
+  }
+}
+
+
+---
+# ./ALL_FILES.txt
+
+
+
+---
+# ./admin-console/wallet/AdminContractCallSequencer.ts
+
+// ../admin-console/wallet/AdminContractCallSequencer.ts
+
+export class AdminContractCallSequencer {
+  static async runSequential(
+    calls: any[],
+    openContractCall: (call: any) => Promise<void>,
+  ): Promise<void> {
+    for (const call of calls) {
+      await openContractCall(call);
+    }
+  }
+
+  static async runSingle(
+    call: any,
+    openContractCall: (call: any) => Promise<void>,
+  ): Promise<void> {
+    await openContractCall(call);
+  }
+}
+
+
+---
+# ./admin-console/AdminConsoleFrontend.ts
+
+// ../admin-console/AdminConsoleFrontend.ts
+import { AdminHttpClient } from '../admin-console/http/AdminHttpClient';
+import { AdminInputValidator } from '../admin-console/validation/AdminInputValidator';
+import { AdminStoreFormAdapter } from '../admin-console/adapters/AdminStoreFormAdapter';
+import { AdminContractCallSequencer } from '../admin-console/wallet/AdminContractCallSequencer';
+import type { AdminPollerStatusDTO } from '/src/contracts/domain';
+
+export async function onCreateStoreSubmit(
+  e: Event,
+  form: {
+    principal: string;
+    name?: string;
+    display_name?: string;
+    logo_url?: string;
+    brand_color?: string;
+    webhook_url?: string;
+    support_email?: string;
+    support_url?: string;
+    allowed_origins?: string;
+  },
+  authHeader: string,
+): Promise<void> {
+  e.preventDefault();
+  AdminInputValidator.assertStacksAddress(form.principal, 'principal');
+  const body = AdminStoreFormAdapter.toCreateStoreBody(form);
+  const resp = await AdminHttpClient.request('/stores', { method: 'POST', authHeader, jsonBody: body });
+  if (resp.status === 201) {
+    await AdminHttpClient.parseJson(resp);
+    return;
+  }
+  if (resp.status === 409) {
+    throw new Error('conflict');
+  }
+  throw new Error(`create_store_failed_${resp.status}`);
+}
+
+export async function onActivateToggle(storeId: string, active: boolean, authHeader: string): Promise<void> {
+  AdminInputValidator.assertUuid(storeId, 'storeId');
+  const resp = await AdminHttpClient.request(`/stores/${storeId}/activate`, {
+    method: 'PATCH',
+    authHeader,
+    jsonBody: { active },
+  });
+  if (resp.ok) {
+    await AdminHttpClient.parseJson(resp);
+    return;
+  }
+  throw new Error(`activate_toggle_failed_${resp.status}`);
+}
+
+export async function onRotateKeysClick(
+  storeId: string,
+  authHeader: string,
+): Promise<{ apiKey: string; hmacSecret: string }> {
+  AdminInputValidator.assertUuid(storeId, 'storeId');
+  const resp = await AdminHttpClient.request(`/stores/${storeId}/rotate-keys`, {
+    method: 'POST',
+    authHeader,
+  });
+  if (!resp.ok) throw new Error(`rotate_keys_failed_${resp.status}`);
+  const json = await AdminHttpClient.parseJson<{ apiKey: string; hmacSecret: string }>(resp);
+  return { apiKey: String(json.apiKey), hmacSecret: String(json.hmacSecret) };
+}
+
+export async function onSyncOnchainClick(
+  storeId: string,
+  authHeader: string,
+  openContractCall: (call: any) => Promise<void>,
+): Promise<void> {
+  AdminInputValidator.assertUuid(storeId, 'storeId');
+  const resp = await AdminHttpClient.request(`/stores/${storeId}/sync-onchain`, {
+    method: 'POST',
+    authHeader,
+  });
+  if (!resp.ok) throw new Error(`sync_onchain_failed_${resp.status}`);
+  const json = await AdminHttpClient.parseJson<{ calls: any[] }>(resp);
+  await AdminContractCallSequencer.runSequential(Array.isArray(json.calls) ? json.calls : [], openContractCall);
+}
+
+export async function onSetSbtcTokenSubmit(
+  e: Event,
+  form: { contractAddress: string; contractName: string },
+  authHeader: string,
+  openContractCall: (call: any) => Promise<void>,
+): Promise<void> {
+  e.preventDefault();
+  AdminInputValidator.assertContractPrincipalPair(form.contractAddress, form.contractName);
+  const resp = await AdminHttpClient.request('/set-sbtc-token', {
+    method: 'POST',
+    authHeader,
+    jsonBody: { contractAddress: form.contractAddress, contractName: form.contractName },
+  });
+  if (!resp.ok) throw new Error(`set_sbtc_token_failed_${resp.status}`);
+  const json = await AdminHttpClient.parseJson<{ call: any }>(resp);
+  await AdminContractCallSequencer.runSingle(json.call, openContractCall);
+}
+
+export async function onRestartPollerClick(authHeader: string): Promise<{ running: boolean }> {
+  const resp = await AdminHttpClient.request('/poller/restart', { method: 'POST', authHeader });
+  if (!resp.ok) throw new Error(`restart_poller_failed_${resp.status}`);
+  const json = await AdminHttpClient.parseJson<AdminPollerStatusDTO>(resp);
+  return { running: !!json.running };
+}
+
+export async function onRetryWebhookClick(webhookLogId: string, authHeader: string): Promise<void> {
+  AdminInputValidator.assertUuid(webhookLogId, 'webhookLogId');
+  const resp = await AdminHttpClient.request('/webhooks/retry', {
+    method: 'POST',
+    authHeader,
+    jsonBody: { webhookLogId },
+  });
+  if (resp.status === 200 || resp.status === 202) return;
+  throw new Error(`retry_webhook_failed_${resp.status}`);
+}
+
+export async function onCancelInvoiceClick(
+  invoiceId: string,
+  authHeader: string,
+  maybeBuildOnchainCancel: () => Promise<any | undefined>,
+  openContractCall: (call: any) => Promise<void>,
+): Promise<void> {
+  AdminInputValidator.assertUuid(invoiceId, 'invoiceId');
+  const resp = await AdminHttpClient.request(`/invoices/${invoiceId}/cancel`, {
+    method: 'POST',
+    authHeader,
+  });
+  if (resp.status === 400) {
+    const j = await AdminHttpClient.parseJson<{ error?: string }>(resp);
+    if (j?.error === 'already_paid') throw new Error('already_paid');
+    throw new Error('cancel_invoice_bad_request');
+  }
+  if (!resp.ok) throw new Error(`cancel_invoice_failed_${resp.status}`);
+  await AdminHttpClient.parseJson(resp);
+  const cancelCall = await maybeBuildOnchainCancel();
+  if (cancelCall) await AdminContractCallSequencer.runSingle(cancelCall, openContractCall);
+}
+
+export async function onBootstrapAdminClick(
+  authHeader: string,
+  buildCall: () => Promise<any>,
+  openContractCall: (call: any) => Promise<void>,
+  verifyGetAdmin: () => Promise<boolean>,
+): Promise<void> {
+  const call = await buildCall();
+  await AdminContractCallSequencer.runSingle(call, openContractCall);
+  const ok = await verifyGetAdmin();
+  if (!ok) throw new Error('bootstrap_admin_verification_failed');
+}
+
+
+---
+# ./admin-console/validation/AdminInputValidator.ts
+
+export class AdminInputValidator {
+  static assertUuid(value: string, label: string = 'id'): string {
+    const ok =
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
+        value,
+      );
+    if (!ok) {
+      throw new TypeError(`Invalid ${label}`);
+    }
+    return value;
+  }
+
+  static assertStacksAddress(value: string, label: string = 'principal'): string {
+    if (typeof value !== 'string' || value.length < 2 || !value.startsWith('S')) {
+      throw new TypeError(`Invalid ${label}`);
+    }
+    return value;
+  }
+
+  static assertContractPrincipalPair(
+    contractAddress: string,
+    contractName: string,
+  ): { contractAddress: string; contractName: string } {
+    this.assertStacksAddress(contractAddress, 'contractAddress');
+    if (!contractName || typeof contractName !== 'string') {
+      throw new TypeError('Invalid contractName');
+    }
+    return { contractAddress, contractName };
+  }
+}
+
+
+---
+# ./admin-console/http/AdminHttpClient.ts
+
+// ../admin-console/http/AdminHttpClient.ts
+
+export class AdminHttpClient {
+  private static readonly base = '/api/admin';
+
+  static async request(
+    path: string,
+    options: { method: 'GET' | 'POST' | 'PATCH'; authHeader: string; jsonBody?: any }
+  ): Promise<Response> {
+    const headers: Record<string, string> = { Authorization: options.authHeader };
+    const init: RequestInit = { method: options.method, headers };
+    if (options.jsonBody !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(options.jsonBody);
+    }
+    const url = `${this.base}${path.startsWith('/') ? path : '/' + path}`;
+    return fetch(url, init);
+  }
+
+  static async parseJson<T = any>(resp: Response): Promise<T> {
+    const text = await resp.text();
+    if (!text) {
+      // @ts-expect-error allow undefined when caller expects optional
+      return undefined as T;
+    }
+    return JSON.parse(text) as T;
+  }
+}
+
+
+---
+# ./admin-console/adapters/AdminStoreFormAdapter.ts
+
+// ../admin-console/adapters/AdminStoreFormAdapter.ts
+
+export class AdminStoreFormAdapter {
+  static toCreateStoreBody(form: {
+    principal: string;
+    name?: string;
+    display_name?: string;
+    logo_url?: string;
+    brand_color?: string;
+    webhook_url?: string;
+    support_email?: string;
+    support_url?: string;
+    allowed_origins?: string;
+  }): {
+    principal: string;
+    name?: string;
+    displayName?: string;
+    logoUrl?: string;
+    brandColor?: string;
+    webhookUrl?: string;
+    supportEmail?: string;
+    supportUrl?: string;
+    allowedOrigins?: string;
+  } {
+    return {
+      principal: form.principal,
+      name: form.name ?? undefined,
+      displayName: form.display_name ?? undefined,
+      logoUrl: form.logo_url ?? undefined,
+      brandColor: form.brand_color ?? undefined,
+      webhookUrl: form.webhook_url ?? undefined,
+      supportEmail: form.support_email ?? undefined,
+      supportUrl: form.support_url ?? undefined,
+      allowedOrigins: form.allowed_origins ?? undefined,
+    };
+  }
+}

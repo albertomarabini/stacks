@@ -1,6 +1,6 @@
-// /frontend/merchant-dashboard/webhooks/WebhookConsoleCoordinator.ts
+// ../merchant-dashboard/webhooks/WebhookConsoleCoordinator.ts
 
-import type { MerchantApiHttpClient } from '/frontend/merchant-dashboard/http/MerchantApiHttpClient';
+import type { MerchantApiHttpClient } from '../http/MerchantApiHttpClient';
 
 export interface WebhookLogDTO {
   id: string;

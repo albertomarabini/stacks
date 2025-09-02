@@ -1,5 +1,5 @@
 // src/delegates/MerchantProjectionPolicy.ts
-import type { MerchantRow } from '/src/contracts/domain';
+import type { MerchantRow } from '../contracts/domain';
 
 export class MerchantProjectionPolicy {
   getListProjectionSQL(): string {
@@ -36,6 +36,15 @@ export class MerchantProjectionPolicy {
       support_url: raw.support_url ?? undefined,
       allowed_origins: raw.allowed_origins ?? undefined,
       created_at: Number(raw.created_at),
+
+      // NEW: key-rotation columns
+      keys_rotation_version: Number(raw.keys_rotation_version ?? 0),
+      keys_last_rotated_at:
+        raw.keys_last_rotated_at != null ? Number(raw.keys_last_rotated_at) : undefined,
+      keys_last_revealed_at:
+        raw.keys_last_revealed_at != null ? Number(raw.keys_last_revealed_at) : undefined,
+      keys_dual_valid_until:
+        raw.keys_dual_valid_until != null ? Number(raw.keys_dual_valid_until) : undefined,
     };
   }
 }

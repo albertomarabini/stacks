@@ -1,0 +1,127 @@
+{
+  "startedAt": "2025-09-02T18:48:43.825Z",
+  "mode": "devnet",
+  "core": "http://localhost:20443",
+  "api": "http://localhost:3999",
+  "contracts": {
+    "payment": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+    "token": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mock-sbtc-token"
+  },
+  "calls": [
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-admin",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [],
+      "startedAt": "2025-09-02T18:48:43.904Z",
+      "durationMs": 20,
+      "resultRepr": "0x09",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mock-sbtc-token",
+      "function": "bootstrap-owner",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [],
+      "startedAt": "2025-09-02T18:48:43.925Z",
+      "txid": "0c153fdd27e1adf95f6815aea5a21442e4c063e907e69a3a3b1d98a97805b1d0",
+      "nonce": 2,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 9579,
+      "resultRepr": "(ok true)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "bootstrap-admin",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [],
+      "startedAt": "2025-09-02T18:48:53.504Z",
+      "txid": "3ad43627125334683a69f354571d62cbed121520c9b62c3884eb3cf349f31729",
+      "nonce": 3,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 58566,
+      "resultRepr": "(ok true)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-sbtc",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [],
+      "startedAt": "2025-09-02T18:49:52.070Z",
+      "durationMs": 125,
+      "resultRepr": "0x09",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-sbtc-token",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mock-sbtc-token"
+      ],
+      "startedAt": "2025-09-02T18:49:52.196Z",
+      "txid": "576cc32645f8202d3bf303ee49bf157bf7318b7e3fdbca8bab432f51da0920b8",
+      "nonce": 4,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 60097,
+      "resultRepr": "(ok true)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-sbtc-token",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mock-sbtc-token"
+      ],
+      "startedAt": "2025-09-02T18:50:52.293Z",
+      "txid": "ace4564daf8103ddac12716671438eaf2db74759688ba59896ef4e972542f01f",
+      "nonce": 0,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 60011,
+      "resultRepr": "(err u3)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "register-merchant",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "none"
+      ],
+      "startedAt": "2025-09-02T18:51:52.305Z",
+      "txid": "e3767f19e83e532e2318cb475442937a2aa14ac7cdd5ee97a7e0fabc2d27f7dd",
+      "nonce": 5,
+      "fee": 3000,
+      "txStatus": "timeout",
+      "durationMs": 90193
+    }
+  ],
+  "summary": {
+    "pass": 4,
+    "fail": 0,
+    "skip": 0
+  },
+  "finishedAt": "2025-09-02T18:53:22.499Z"
+}

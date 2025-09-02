@@ -1,7 +1,7 @@
 // src/delegates/SubscriptionLifecycleProcessor.ts
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { IStacksChainClient, IWebhookDispatcher } from '/src/contracts/interfaces';
-import type { NormalizedEvent } from '/src/contracts/domain';
+import type { ISqliteStore } from '../contracts/dao';
+import type { IStacksChainClient, IWebhookDispatcher } from '../contracts/interfaces';
+import type { NormalizedEvent } from '../contracts/domain';
 
 export class SubscriptionLifecycleProcessor {
   constructor(

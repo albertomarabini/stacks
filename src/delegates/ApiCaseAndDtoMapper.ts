@@ -5,7 +5,8 @@ import type {
   MerchantRow,
   PublicInvoiceDTO,
   StorePrivateProfileDTO,
-} from '/src/contracts/domain';
+} from '../contracts/domain';
+
 
 export class ApiCaseAndDtoMapper {
   invoiceToPublicDto(r: InvoiceRow): PublicInvoiceDTO {
@@ -57,13 +58,14 @@ export class ApiCaseAndDtoMapper {
 
   storeToPrivateProfile(row: MerchantRow): StorePrivateProfileDTO {
     return {
+      id: row.id,
       name: row.name ?? undefined,
-      displayName: row.display_name ?? undefined,
-      logoUrl: row.logo_url ?? undefined,
-      brandColor: row.brand_color ?? undefined,
+      displayName: row.display_name ?? null,
+      logoUrl: row.logo_url ?? null,
+      brandColor: row.brand_color ?? null,
       webhookUrl: row.webhook_url ?? undefined,
-      supportEmail: row.support_email ?? undefined,
-      supportUrl: row.support_url ?? undefined,
+      supportEmail: row.support_email ?? null,
+      supportUrl: row.support_url ?? null,
       allowedOrigins: row.allowed_origins
         ? row.allowed_origins
             .split(',')

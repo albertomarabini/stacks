@@ -7,7 +7,7 @@ import {
   InvoiceStatus,
   WebhookEventType,
   SubscriptionMode,
-} from '/src/contracts/domain';
+} from '../contracts/domain';
 
 export interface ISqliteStore {
   migrate(): void;
@@ -18,7 +18,24 @@ export interface ISqliteStore {
   updateMerchantActive(storeId: string, active: boolean): number;
   updateMerchantKeysTx(storeId: string, apiKey: string, hmacSecret: string): void;
   listMerchantsProjection(): Omit<MerchantRow, 'api_key' | 'hmac_secret'>[];
-
+  rotateKeysPersist(storeId: string, apiKey: string, hmacSecret: string, now: number):number;
+  markKeysRevealedOnce(storeId: string, expectVersion: number, now: number):boolean;
+  getMerchantById(storeId: string): MerchantRow | undefined;
+  updateMerchantProfile(
+    storeId: string,
+    patch: Partial<Pick<
+      MerchantRow,
+      | 'name'
+      | 'display_name'
+      | 'logo_url'
+      | 'brand_color'
+      | 'webhook_url'
+      | 'support_email'
+      | 'support_url'
+      | 'allowed_origins'
+    >>
+  ): void;
+  
   // Invoices
   invoices: {
     insert(row: InvoiceRow): void;

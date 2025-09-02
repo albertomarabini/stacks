@@ -60,11 +60,17 @@ export interface MerchantRow {
   webhook_url?: string;
   hmac_secret: string;
   api_key: string;
-  active: number; // 0/1
+  active: number;              // 0/1
   support_email?: string;
   support_url?: string;
-  allowed_origins?: string; // CSV
-  created_at: number; // seconds
+  allowed_origins?: string;    // CSV
+  created_at: number;          // seconds
+
+  // new rotation columns (persisted “shown once” guard)
+  keys_rotation_version: number;       // NOT NULL DEFAULT 0
+  keys_last_rotated_at?: number | null;
+  keys_last_revealed_at?: number | null;
+  keys_dual_valid_until?: number | null;
 }
 
 export interface InvoiceRow {
@@ -139,14 +145,15 @@ export interface PublicInvoiceDTO {
 }
 
 export interface StorePublicProfileDTO {
-  displayName?: string;
-  logoUrl?: string;
-  brandColor?: string;
-  supportEmail?: string;
-  supportUrl?: string;
+  displayName: string | null;
+  logoUrl: string | null;
+  brandColor: string | null;
+  supportEmail: string | null;
+  supportUrl: string | null;
 }
 
 export interface StorePrivateProfileDTO extends StorePublicProfileDTO {
+  id: string;
   name?: string;
   webhookUrl?: string;
   allowedOrigins: string[];

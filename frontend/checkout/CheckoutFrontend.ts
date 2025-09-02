@@ -1,13 +1,13 @@
 // frontend/checkout/CheckoutFrontend.ts
-import { InvoiceCountdownDelegate } from '/frontend/checkout/delegates/InvoiceCountdownDelegate';
-import { InvoiceStatusPollerDelegate } from '/frontend/checkout/delegates/InvoiceStatusPollerDelegate';
-import { WalletContractCallDelegate } from '/frontend/checkout/delegates/WalletContractCallDelegate';
-import { StoreBrandingDelegate } from '/frontend/checkout/delegates/StoreBrandingDelegate';
-import { StatusBadgeDelegate } from '/frontend/checkout/delegates/StatusBadgeDelegate';
-import { PaymentActionsDelegate } from '/frontend/checkout/delegates/PaymentActionsDelegate';
-import { PublicCheckoutApiClient } from '/frontend/checkout/delegates/PublicCheckoutApiClient';
-import { QrRenderDelegate } from '/frontend/checkout/delegates/QrRenderDelegate';
-import { BannerDelegate } from '/frontend/checkout/delegates/BannerDelegate';
+import { InvoiceCountdownDelegate } from '../checkout/delegates/InvoiceCountdownDelegate';
+import { InvoiceStatusPollerDelegate } from '../checkout/delegates/InvoiceStatusPollerDelegate';
+import { WalletContractCallDelegate } from '../checkout/delegates/WalletContractCallDelegate';
+import { StoreBrandingDelegate } from '../checkout/delegates/StoreBrandingDelegate';
+import { StatusBadgeDelegate } from '../checkout/delegates/StatusBadgeDelegate';
+import { PaymentActionsDelegate } from '../checkout/delegates/PaymentActionsDelegate';
+import { PublicCheckoutApiClient } from '../checkout/delegates/PublicCheckoutApiClient';
+import { QrRenderDelegate } from '../checkout/delegates/QrRenderDelegate';
+import { BannerDelegate } from '../checkout/delegates/BannerDelegate';
 import type { PublicInvoiceDTO, StorePublicProfileDTO, UnsignedContractCall, InvoiceStatus } from '/src/contracts/domain';
 
 const HIGHLIGHT_THRESHOLD_MS = 60_000;

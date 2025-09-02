@@ -1,11 +1,11 @@
 // src/webhooks/WebhookDispatcher.ts
 import axios from 'axios';
 import type { Request, Response, NextFunction } from 'express';
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { IWebhookRetryScheduler } from '/src/contracts/interfaces';
-import { WebhookSignatureService } from '/src/delegates/WebhookSignatureService';
-import { WebhookAttemptPlanner } from '/src/delegates/WebhookAttemptPlanner';
-import type { WebhookLogRow, WebhookEventType } from '/src/contracts/domain';
+import type { ISqliteStore } from '../contracts/dao';
+import type { IWebhookRetryScheduler } from '../contracts/interfaces';
+import { WebhookSignatureService } from '../delegates/WebhookSignatureService';
+import { WebhookAttemptPlanner } from '../delegates/WebhookAttemptPlanner';
+import type { WebhookLogRow, WebhookEventType } from '../contracts/domain';
 
 type DispatchCtx = {
   storeId: string;

@@ -1,7 +1,7 @@
 // src/delegates/MerchantCreationService.ts
 import crypto from 'crypto';
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { MerchantRow } from '/src/contracts/domain';
+import type { ISqliteStore } from '../contracts/dao';
+import type { MerchantRow } from '../contracts/domain';
 import type { MerchantDto } from './AdminDtoProjector';
 
 export class MerchantCreationService {

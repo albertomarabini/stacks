@@ -1,6 +1,6 @@
 // src/poller/PollerAdminBridge.ts
-import type { PollerMetrics } from '/src/contracts/domain';
-import { PaymentPoller } from '/src/poller/PaymentPoller';
+import type { PollerMetrics } from '../contracts/domain';
+import { PaymentPoller } from '../poller/PaymentPoller';
 
 export class PollerAdminBridge {
   private poller!: PaymentPoller;

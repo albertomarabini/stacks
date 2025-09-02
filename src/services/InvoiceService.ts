@@ -1,14 +1,14 @@
 // src/services/InvoiceService.ts
 import crypto from 'crypto';
-import type { ISqliteStore } from '/src/contracts/dao';
+import type { ISqliteStore } from '../contracts/dao';
 import type {
   IStacksChainClient,
   IContractCallBuilder,
   IConfigService,
   IInvoiceIdCodec,
-} from '/src/contracts/interfaces';
+} from '../contracts/interfaces';
 import { PricingService } from './PricingService';
-import type { PublicInvoiceDTO, UnsignedContractCall } from '/src/contracts/domain';
+import type { PublicInvoiceDTO, UnsignedContractCall } from '../contracts/domain';
 
 type StoreLike = { id: string; principal: string };
 

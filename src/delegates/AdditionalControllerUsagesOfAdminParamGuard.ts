@@ -1,5 +1,5 @@
 // src/delegates/AdditionalControllerUsagesOfAdminParamGuard.ts
-import { AdminParamGuard } from '/src/delegates/AdminParamGuard';
+import { AdminParamGuard } from '../delegates/AdminParamGuard';
 
 export class AdditionalControllerUsagesOfAdminParamGuard {
   private readonly guard = new AdminParamGuard();

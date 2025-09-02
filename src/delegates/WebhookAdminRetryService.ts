@@ -1,7 +1,7 @@
 // src/delegates/WebhookAdminRetryService.ts
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { IWebhookDispatcher } from '/src/contracts/interfaces';
-import type { WebhookLogRow } from '/src/contracts/domain';
+import type { ISqliteStore } from '../contracts/dao';
+import type { IWebhookDispatcher } from '../contracts/interfaces';
+import type { WebhookLogRow } from '../contracts/domain';
 
 export class WebhookAdminRetryService {
   async retry(

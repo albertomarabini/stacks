@@ -1,4 +1,4 @@
-// /frontend/checkout/delegates/PaymentActionsDelegate.ts
+// ../checkout/delegates/PaymentActionsDelegate.ts
 
 export class PaymentActionsDelegate {
   disablePaymentActions(opts?: {

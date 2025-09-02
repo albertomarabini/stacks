@@ -1,7 +1,7 @@
 // src/delegates/ContractCallEventNormalizer.ts
-import type { IStacksChainClient } from '/src/contracts/interfaces';
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { NormalizedEvent } from '/src/contracts/domain';
+import type { IStacksChainClient } from '../contracts/interfaces';
+import type { ISqliteStore } from '../contracts/dao';
+import type { NormalizedEvent } from '../contracts/domain';
 
 export class ContractCallEventNormalizer {
   async fetchAndFilterEvents(

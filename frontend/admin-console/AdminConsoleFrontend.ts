@@ -1,8 +1,8 @@
-// /frontend/admin-console/AdminConsoleFrontend.ts
-import { AdminHttpClient } from '/frontend/admin-console/http/AdminHttpClient';
-import { AdminInputValidator } from '/frontend/admin-console/validation/AdminInputValidator';
-import { AdminStoreFormAdapter } from '/frontend/admin-console/adapters/AdminStoreFormAdapter';
-import { AdminContractCallSequencer } from '/frontend/admin-console/wallet/AdminContractCallSequencer';
+// ../admin-console/AdminConsoleFrontend.ts
+import { AdminHttpClient } from '../admin-console/http/AdminHttpClient';
+import { AdminInputValidator } from '../admin-console/validation/AdminInputValidator';
+import { AdminStoreFormAdapter } from '../admin-console/adapters/AdminStoreFormAdapter';
+import { AdminContractCallSequencer } from '../admin-console/wallet/AdminContractCallSequencer';
 import type { AdminPollerStatusDTO } from '/src/contracts/domain';
 
 export async function onCreateStoreSubmit(

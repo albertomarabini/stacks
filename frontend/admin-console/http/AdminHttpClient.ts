@@ -1,4 +1,4 @@
-// /frontend/admin-console/http/AdminHttpClient.ts
+// ../admin-console/http/AdminHttpClient.ts
 
 export class AdminHttpClient {
   private static readonly base = '/api/admin';

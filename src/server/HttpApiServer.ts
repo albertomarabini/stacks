@@ -1,26 +1,28 @@
 // src/server/HttpApiServer.ts
 import express, { Express, RequestHandler } from 'express';
-import { PublicApiController } from '/src/controllers/PublicApiController';
-import { MerchantApiController } from '/src/controllers/MerchantApiController';
-import { AdminApiController } from '/src/controllers/AdminApiController';
-import { HealthController } from '/src/controllers/HealthController';
-import { AdminAuth } from '/src/middleware/AdminAuth';
-import { StoreApiAuth } from '/src/middleware/StoreApiAuth';
-import { CrossTenantMask } from '/src/middleware/CrossTenantMask';
-import { RateLimitPolicy } from '/src/middleware/RateLimitPolicy';
-import { CorsPolicy } from '/src/middleware/CorsPolicy';
-import { AdminStaticServer } from '/src/servers/AdminStaticServer';
-import { PaymentPoller } from '/src/poller/PaymentPoller';
-import { WebhookRetryScheduler } from '/src/webhooks/WebhookRetryScheduler';
-import { SubscriptionScheduler } from '/src/schedulers/SubscriptionScheduler';
-import { AdminSurfaceBinder } from '/src/delegates/AdminSurfaceBinder';
-import { WebhookInboundSurfaceBinder } from '/src/delegates/WebhookInboundSurfaceBinder';
-import { RootRouteBinder } from '/src/delegates/RootRouteBinder';
-import { SchedulerStartupCoordinator } from '/src/delegates/SchedulerStartupCoordinator';
-import { CorsMiddlewareFactory } from '/src/delegates/CorsMiddlewareFactory';
-import type { IConfigService } from '/src/contracts/interfaces';
+import { PublicApiController } from '../controllers/PublicApiController';
+import { MerchantApiController } from '../controllers/MerchantApiController';
+import { AdminApiController } from '../controllers/AdminApiController';
+import { HealthController } from '../controllers/HealthController';
+import { AdminAuth } from '../middleware/AdminAuth';
+import { StoreApiAuth } from '../middleware/StoreApiAuth';
+import { CrossTenantMask } from '../middleware/CrossTenantMask';
+import { RateLimitPolicy } from '../middleware/RateLimitPolicy';
+import { CorsPolicy } from '../middleware/CorsPolicy';
+import { AdminStaticServer } from '../servers/AdminStaticServer';
+import { PaymentPoller } from '../poller/PaymentPoller';
+import { WebhookRetryScheduler } from '../webhooks/WebhookRetryScheduler';
+import { SubscriptionScheduler } from '../schedulers/SubscriptionScheduler';
+import { AdminSurfaceBinder } from '../delegates/AdminSurfaceBinder';
+import { WebhookInboundSurfaceBinder } from '../delegates/WebhookInboundSurfaceBinder';
+import { RootRouteBinder } from '../delegates/RootRouteBinder';
+import { SchedulerStartupCoordinator } from '../delegates/SchedulerStartupCoordinator';
+import { CorsMiddlewareFactory } from '../delegates/CorsMiddlewareFactory';
+import type { IConfigService } from '../contracts/interfaces';
 
 type AdminGuard = { authenticateAdmin(req: any, res: any, next: any): void };
+
+
 
 export class HttpApiServer {
   private readonly adminBinder = new AdminSurfaceBinder();
@@ -28,6 +30,7 @@ export class HttpApiServer {
   private readonly rootBinder = new RootRouteBinder();
   private readonly schedulerCoordinator = new SchedulerStartupCoordinator();
   private readonly corsFactory = new CorsMiddlewareFactory();
+  
 
   mountAdminAuth(app: Express, adminAuth: AdminGuard): void {
     this.adminBinder.bindAdminAuth(app, adminAuth);
@@ -97,13 +100,14 @@ export class HttpApiServer {
       (req, res) => deps.publicCtrl.createTx(req, res),
     );
 
-    app.options('/api/v1/stores/:storeId/public-profile', corsPublicProfile);
     app.get(
       '/api/v1/stores/:storeId/public-profile',
       deps.rateLimit.publicProfileLimiter,
       corsPublicProfile,
       (req, res) => deps.publicCtrl.getStorePublicProfile(req, res),
     );
+
+    app.options('/api/v1/stores/:storeId/public-profile', corsPublicProfile);
 
     // Merchant-scoped routes
     const auth = (req: any, res: any, next: any) => deps.storeAuth.verifyApiKey(req, res, next);
@@ -139,12 +143,28 @@ export class HttpApiServer {
       (req, res) => deps.merchantCtrl.cancelInvoice(req, res),
     );
 
+    // Builder first (test tries this one initially)
+    app.post(
+      '/api/v1/stores/:storeId/invoices/:invoiceId/cancel/create-tx',
+      auth, mask,
+      (req, res) => deps.merchantCtrl.cancelInvoiceCreateTx(req, res),
+    );
+
+
     app.post(
       '/api/v1/stores/:storeId/refunds',
       auth,
       mask,
       express.json(),
       (req, res) => deps.merchantCtrl.buildRefund(req, res),
+    );
+
+    app.post(
+      '/api/v1/stores/:storeId/refunds/create-tx',
+      auth, mask,
+      deps.rateLimit.createInvoiceLimiter,
+      express.json(),
+      (req, res) => deps.merchantCtrl.buildRefundTx(req, res),
     );
 
     app.get(
@@ -217,11 +237,24 @@ export class HttpApiServer {
       (req, res) => deps.merchantCtrl.buildDirectSubscriptionPaymentTx(req, res),
     );
 
-    // Admin API
-    const adminGuard = (req: any, res: any, next: any) =>
-      deps.adminAuth.authenticateAdmin(req, res, next);
 
-    app.get('/api/admin/stores', adminGuard, (req, res) => deps.adminCtrl.listStores(req, res));
+    // Admin API
+    const adminGuard = (req: any, res: any, next: any) => deps.adminAuth.authenticateAdmin(req, res, next);
+
+    // parse JSON first, then guard, and forward async errors
+    app.post('/api/admin/stores',
+      express.json(),
+      adminGuard,
+      (req, res, next) => deps.adminCtrl.createStore(req, res).catch(next)
+    );
+
+
+    app.get('/api/admin/stores', adminGuard, (req, res) =>
+      deps.adminCtrl.listStores(req, res)
+    );
+
+    app.get('/api/admin/invoices', adminGuard, (req, res) => deps.adminCtrl.listInvoices(req, res));
+
 
     app.post(
       '/api/admin/stores',

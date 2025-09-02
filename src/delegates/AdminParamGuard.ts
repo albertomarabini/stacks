@@ -1,5 +1,5 @@
 // src/delegates/AdminParamGuard.ts
-import type { InvoiceStatus } from '/src/contracts/domain';
+import type { InvoiceStatus } from '../contracts/domain';
 
 export class AdminParamGuard {
   assertUuid(id: string): void {
@@ -10,11 +10,11 @@ export class AdminParamGuard {
     }
   }
 
-  assertStacksPrincipal(p: string): void {
-    if (typeof p !== 'string' || p.length < 2 || p[0] !== 'S') {
-      throw new TypeError('Invalid Stacks principal/address');
+  assertStacksPrincipal(p: string) {
+    // allow mainnet (SP…) and testnet (ST…) standard principals
+    if (!/^S[PT][0-9A-Z]{38,60}$/i.test(p)) throw new TypeError('Invalid Stacks principal/address');
+      return true;
     }
-  }
 
   parseInvoiceStatuses(
     input: string | string[] | undefined,

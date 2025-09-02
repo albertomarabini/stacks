@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 
-import type { ISqliteStore } from '/src/contracts/dao';
+import type { ISqliteStore } from '../contracts/dao';
 import type {
   MerchantRow,
   InvoiceRow,
@@ -12,11 +12,13 @@ import type {
   InvoiceStatus,
   WebhookEventType,
   SubscriptionMode,
-} from '/src/contracts/domain';
-import { WebhookRetryQueryComposer } from '/src/delegates/WebhookRetryQueryComposer';
-import { MerchantProjectionPolicy } from '/src/delegates/MerchantProjectionPolicy';
-import { SqlInListBuilder } from '/src/delegates/SqlInListBuilder';
-import type { IInvoiceIdCodec } from '/src/contracts/interfaces';
+} from '../contracts/domain';
+import { WebhookRetryQueryComposer } from '../delegates/WebhookRetryQueryComposer';
+import { MerchantProjectionPolicy } from '../delegates/MerchantProjectionPolicy';
+import { SqlInListBuilder } from '../delegates/SqlInListBuilder';
+import type { IInvoiceIdCodec } from '../contracts/interfaces';
+
+const nowSec = () => Math.floor(Date.now() / 1000);
 
 export class SqliteStore implements ISqliteStore {
   private readonly db: Database.Database;
@@ -40,17 +42,6 @@ export class SqliteStore implements ISqliteStore {
     const migrationsPath = path.join(process.cwd(), 'db', 'migrations.sql');
     const sql = fs.readFileSync(migrationsPath, 'utf8');
     this.db.exec(sql);
-
-    // Additional schema for poller cursor (not in migrations.sql)
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS poller_cursor (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        last_run_at INTEGER NOT NULL,
-        last_height INTEGER NOT NULL CHECK (last_height >= 0),
-        last_txid TEXT,
-        last_block_hash TEXT
-      );
-    `);
   }
 
   // Merchants
@@ -109,6 +100,81 @@ export class SqliteStore implements ISqliteStore {
     const dbRows = this.db.prepare(sql).all() as any[];
     return dbRows.map((r) => this.merchantProjection.mapListRow(r));
   }
+  getMerchantById(storeId: string): MerchantRow | undefined {
+    return this.db.prepare(`SELECT * FROM merchants WHERE id = ?`).get(storeId) as MerchantRow | undefined;
+  }
+
+  public updateMerchantProfile(
+    storeId: string,
+    patch: Partial<Pick<
+      MerchantRow,
+      | 'name'
+      | 'display_name'
+      | 'logo_url'
+      | 'brand_color'
+      | 'webhook_url'
+      | 'support_email'
+      | 'support_url'
+      | 'allowed_origins'
+    >>
+  ): void {
+    const allowed = [
+      'name',
+      'display_name',
+      'logo_url',
+      'brand_color',
+      'webhook_url',
+      'support_email',
+      'support_url',
+      'allowed_origins',
+    ] as const;
+
+    const keys = allowed.filter(k => (patch as any)[k] !== undefined);
+    if (keys.length === 0) return; // nothing to update
+
+    const setSql = keys.map(k => `${k} = ?`).join(', ');
+    const values = keys.map(k => (patch as any)[k]);
+
+    this.db.prepare(
+      `UPDATE merchants SET ${setSql} WHERE id = ?`
+    ).run(...values, storeId);
+  }
+
+  // 1) Rotate + bump version, clear revealed flag (atomic)
+  rotateKeysPersist(storeId: string, apiKey: string, hmacSecret: string, now = nowSec()): number {
+    const update = this.db.prepare(`
+      UPDATE merchants
+         SET api_key = ?,
+             hmac_secret = ?,
+             keys_rotation_version = keys_rotation_version + 1,
+             keys_last_rotated_at = ?,
+             keys_last_revealed_at = NULL,
+             keys_dual_valid_until = NULL
+       WHERE id = ?
+    `);
+    const fetchV = this.db.prepare(`SELECT keys_rotation_version AS v FROM merchants WHERE id = ?`);
+
+    const tx = this.db.transaction((id: string) => {
+      update.run(apiKey, hmacSecret, now, id);
+      return fetchV.get(id) as { v: number } | undefined;
+    });
+
+    const row = tx(storeId);
+    return row?.v ?? 0;
+  }
+
+  // 2) Exactly-once reveal for that version
+  markKeysRevealedOnce(storeId: string, expectVersion: number, now = nowSec()): boolean {
+    const stmt = this.db.prepare(`
+      UPDATE merchants
+         SET keys_last_revealed_at = ?
+       WHERE id = ?
+         AND keys_rotation_version = ?
+         AND keys_last_revealed_at IS NULL
+    `);
+    const info = stmt.run(now, storeId, expectVersion);
+    return info.changes === 1;
+  }
 
   // Invoices
 
@@ -152,6 +218,16 @@ export class SqliteStore implements ISqliteStore {
         row.created_at,
         row.subscription_id ?? null,
       );
+    },
+
+    markCanceled: (storeId: string, idRaw: string): number => {
+      const stmt = this.db.prepare(`
+        UPDATE invoices
+        SET status = 'canceled'
+        WHERE store_id = ? AND id_raw = ? AND status = 'unpaid' AND IFNULL(expired, 0) = 0
+      `);
+      const info = stmt.run(storeId, idRaw);
+      return info.changes ?? 0;
     },
 
     findByStoreAndIdRaw: (storeId: string, idRaw: string): InvoiceRow | undefined => {
@@ -652,6 +728,14 @@ export class SqliteStore implements ISqliteStore {
 }
 
 export function openDatabaseAndMigrate(dbPath: string): ISqliteStore {
+  if (process.env.GLOBAL_DEBUGGING === "1") {
+    try {
+      fs.rmSync(dbPath, { force: true });
+      fs.rmSync(`${dbPath}-wal`, { force: true });
+      fs.rmSync(`${dbPath}-shm`, { force: true });
+    } catch { /* ignore */ }
+  }
+
   const db = new Database(dbPath);
   const store = new SqliteStore(db);
   store.migrate();

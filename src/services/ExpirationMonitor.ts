@@ -1,8 +1,8 @@
 // src/services/ExpirationMonitor.ts
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { IStacksChainClient, IWebhookDispatcher } from '/src/contracts/interfaces';
-import type { InvoiceRow } from '/src/contracts/domain';
-import { Validation } from '/src/validation/rules';
+import type { ISqliteStore } from '../contracts/dao';
+import type { IStacksChainClient, IWebhookDispatcher } from '../contracts/interfaces';
+import type { InvoiceRow } from '../contracts/domain';
+import { Validation } from '../validation/rules';
 
 export class ExpirationMonitor {
   async emitInvoiceExpiredWebhook(

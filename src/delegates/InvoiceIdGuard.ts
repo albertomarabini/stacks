@@ -1,5 +1,5 @@
 // src/delegates/InvoiceIdGuard.ts
-import type { IInvoiceIdCodec } from '/src/contracts/interfaces';
+import type { IInvoiceIdCodec } from '../contracts/interfaces';
 
 export class InvoiceIdGuard {
   constructor(private codec: IInvoiceIdCodec) {}

@@ -1,7 +1,7 @@
 // src/webhooks/WebhookRetryScheduler.ts
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { IWebhookDispatcher, IWebhookRetryScheduler } from '/src/contracts/interfaces';
-import type { WebhookLogRow, WebhookEventType } from '/src/contracts/domain';
+import type { ISqliteStore } from '../contracts/dao';
+import type { IWebhookDispatcher, IWebhookRetryScheduler } from '../contracts/interfaces';
+import type { WebhookLogRow, WebhookEventType } from '../contracts/domain';
 
 type EnqueueCtx = {
   storeId: string;

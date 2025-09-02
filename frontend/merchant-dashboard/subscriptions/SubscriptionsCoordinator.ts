@@ -1,6 +1,6 @@
-// /frontend/merchant-dashboard/subscriptions/SubscriptionsCoordinator.ts
+// ../merchant-dashboard/subscriptions/SubscriptionsCoordinator.ts
 import { PublicInvoiceDTO, SubscriptionMode } from '/src/contracts/domain';
-import type { MerchantApiHttpClient } from '/frontend/merchant-dashboard/http/MerchantApiHttpClient';
+import type { MerchantApiHttpClient } from '../http/MerchantApiHttpClient';
 
 type SubItem = {
   id: string;

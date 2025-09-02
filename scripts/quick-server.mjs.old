@@ -1,0 +1,932 @@
+#!/usr/bin/env node
+/* eslint-disable no-console */
+
+/**
+ * sBTC Payment – Server Self Test (Plain Node, no Jest)
+ * -----------------------------------------------------
+ * - Hits your Express/Node backend (REST) instead of Clarinet simnet
+ * - Mirrors pipelines: admin config, invoice lifecycle, refunds, subscriptions, RO
+ * - Validates shapes/rules, CORS, UnsignedContractCall builders (no broadcast)
+ * - Node-only: webhook HMAC verification, rotate-keys "one-time", negative auth, rate-limit smoke
+ *
+ * Usage:
+ *   node scripts/quick-server.mjs
+ *
+ * Env (minimal):
+ *   BASE_URL=http://localhost:3000
+ *   ADMIN_TOKEN=...                 // or ADMIN_USER / ADMIN_PASS for Basic
+ *   MERCHANT_PRINCIPAL=SP...        // principal to register as a store
+ *
+ * Optional env:
+ *   STORE_ID=<uuid>                 // reuse existing store; if empty, creates one
+ *   BRAND_NAME="Demo Store"
+ *   SBTC_CONTRACT_ADDRESS=SP...
+ *   SBTC_CONTRACT_NAME=sbtc-token
+ *   PAYER_PRINCIPAL=ST...           // used for /create-tx post-conditions
+ */
+
+import crypto from "node:crypto";
+import http from "node:http";
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Config
+// ───────────────────────────────────────────────────────────────────────────────
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+const ADMIN_USER = process.env.ADMIN_USER;
+const ADMIN_PASS = process.env.ADMIN_PASS;
+const MERCHANT_PRINCIPAL = process.env.MERCHANT_PRINCIPAL || "";
+const SBTC_ADDRESS = process.env.SBTC_CONTRACT_ADDRESS || "";
+const SBTC_NAME = process.env.SBTC_CONTRACT_NAME || "";
+const BRAND_NAME = process.env.BRAND_NAME || "Demo Store";
+let STORE_ID = process.env.STORE_ID || ""; // may be set after create
+let MERCHANT_API_KEY = "";                 // filled after rotate-keys
+let HMAC_SECRET = "";                      // filled after rotate-keys
+
+// For public create-tx validation
+const DUMMY_PAYER = process.env.PAYER_PRINCIPAL || "ST2J...TESTPAYER";
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Pretty output, harness
+// ───────────────────────────────────────────────────────────────────────────────
+const c = {
+  green: (s) => `\x1b[32m${s}\x1b[0m`,
+  red: (s) => `\x1b[31m${s}\x1b[0m`,
+  yellow: (s) => `\x1b[33m${s}\x1b[0m`,
+  dim: (s) => `\x1b[2m${s}\x1b[0m`,
+  bold: (s) => `\x1b[1m${s}\x1b[0m`,
+};
+function banner() {
+  console.log(c.bold("\nsBTC Payment – Server Self Test"));
+  console.log(c.dim(`Target: ${BASE_URL}`));
+  console.log("");
+}
+const safeStr = (v) => {
+    try { return typeof v === "string" ? v : JSON.stringify(v); }
+    catch { return String(v ?? ""); }
+  };
+const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "..." : s);
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Test harness with explicit preconditions & BLOCKED status
+// ───────────────────────────────────────────────────────────────────────────────
+const Status = { PASS: "PASS", FAIL: "FAIL", SKIP: "SKIP", BLOCKED: "BLOCKED" };
+
+function result(name, status, extras = {}) { return { name, status, ...extras }; }
+function pass(name) { return result(name, Status.PASS); }
+function skip(name, reason) { return result(name, Status.SKIP, { reason }); }
+function fail(name, errOrObj, hint) {
+  return result(name, Status.FAIL, {
+    reason: hint || errOrObj?.message || "unexpected",
+    result: safeStr(errOrObj?.result || errOrObj),
+  });
+}
+function blocked(name, reason) { return result(name, Status.BLOCKED, { reason }); }
+
+function printResult(r, i) {
+  const icon =
+    r.status === Status.PASS ? "✓" :
+    r.status === Status.SKIP ? "!" :
+    r.status === Status.BLOCKED ? "·" :
+    "✗";
+
+  const color =
+    r.status === Status.PASS ? c.green :
+    r.status === Status.SKIP ? c.yellow :
+    r.status === Status.BLOCKED ? c.dim :
+    c.red;
+
+  let log = `${i}.  ${color(icon)} ${r.name}`
+  if (r.reason) log += ` - ${c.bold("reason")}: ${r.reason}`;
+  if (r.result) log += ` - ${c.bold("result")}: ${truncate(r.result, 500)}`;
+  console.log(log);
+}
+
+/**
+ * step(name, fn, requires)
+ * - requires: array of precondition descriptors or thunks returning one
+ *   descriptor: { label: string, ok: boolean, reason?: string }
+ *   If any `ok === false`, the test is BLOCKED and `fn` is not executed.
+ */
+async function step(name, fn, requires = []) {
+  const checks = requires.map(r => (typeof r === "function" ? r() : r));
+  const unmet = checks.find(ch => !ch.ok);
+  if (unmet) return blocked(name, unmet.reason || `requires ${unmet.label}`);
+  try {
+    const out = await fn();
+    if (out?.status) return out;               // already a result()
+    return out ? pass(name) : fail(name, null, "falsy step result");
+  } catch (e) {
+    return fail(name, e, e?.message || "threw");
+  }
+}
+
+// Common preconditions evaluated at call time.
+// NOTE: these are functions so they see latest mutated state.
+const need = {
+  env: (k) => () => ({ label: `env:${k}`, ok: !!process.env[k], reason: `missing ${k}` }),
+  storeId: () => ({ label: "STORE_ID", ok: !!STORE_ID, reason: "store was not created/resolved" }),
+  apiKey: () => ({ label: "MERCHANT_API_KEY", ok: !!MERCHANT_API_KEY, reason: "rotate-keys did not reveal API key" }),
+  hmac:   () => ({ label: "HMAC_SECRET", ok: !!HMAC_SECRET, reason: "rotate-keys did not reveal HMAC secret" }),
+  invoiceA: () => ({ label: "invoiceA", ok: !!invoiceA?.idRaw, reason: "no invoice created to continue flow" }),
+  invoiceExp: () => ({ label: "invoiceExp", ok: !!invoiceExp?.idRaw, reason: "no short-ttl invoice created" }),
+  subId: () => ({ label: "subscription.id", ok: !!sub?.id, reason: "no subscription id to continue flow" }),
+};
+
+// ───────────────────────────────────────────────────────────────────────────────
+// HTTP helpers
+// ───────────────────────────────────────────────────────────────────────────────
+function adminHeaders() {
+  const h = { "Content-Type": "application/json" };
+
+  // Prefer Bearer if present
+  if (ADMIN_TOKEN) {
+    h.Authorization = `Bearer ${ADMIN_TOKEN}`;
+    // Fallbacks for servers that use API-key-style headers for admin
+    h["X-Admin-Token"] = ADMIN_TOKEN;
+    h["X-API-Key"] = ADMIN_TOKEN;
+    return h;
+  }
+
+  // Otherwise try Basic
+  if (ADMIN_USER && ADMIN_PASS) {
+    const b64 = Buffer.from(`${ADMIN_USER}:${ADMIN_PASS}`).toString("base64");
+    h.Authorization = `Basic ${b64}`;
+    return h;
+  }
+
+  return h;
+}
+
+function merchantHeaders() {
+  return {
+    "Content-Type": "application/json",
+    "X-API-Key": MERCHANT_API_KEY || "MISSING",
+  };
+}
+async function httpJson(method, path, body, kind = "public") {
+  const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+  const h =
+    kind === "admin" ? adminHeaders()
+    : kind === "merchant" ? merchantHeaders()
+    : { "Content-Type": "application/json" };
+  const res = await fetch(url, {
+    method,
+    headers: h,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch { /* not json */ }
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status} ${res.statusText}`);
+    err.status = res.status;
+    err.body = json || text;
+    throw err;
+  }
+  return json;
+}
+async function raw(method, path, headers = {}, body) {
+  const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+  return fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+// PATCH: send a single method in preflight; allow caller to choose verb
+async function options(path, origin, kind = "public", method = "POST") {
+  const h = kind === "admin" ? adminHeaders() : kind === "merchant" ? merchantHeaders() : {};
+  return raw("OPTIONS", path, {
+    ...h,
+    Origin: origin,
+    "Access-Control-Request-Method": method,
+    "Access-Control-Request-Headers": "Content-Type,X-API-Key,X-Webhook-Timestamp,X-Webhook-Signature",
+  });
+}
+function corsAllowed(res, origin) {
+  const v = res.headers.get("access-control-allow-origin");
+  return v === origin;
+}
+function allowHeadersContain(res, expected) {
+  const v = (res.headers.get("access-control-allow-headers") || "").toLowerCase();
+  return expected.every(h => v.includes(h.toLowerCase()));
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Small utils & schema helpers
+// ───────────────────────────────────────────────────────────────────────────────
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const nowSec = () => Math.floor(Date.now() / 1000);
+const randHex32 = () => crypto.randomBytes(32).toString("hex");
+const expectKeys = (obj, keys) => keys.every((k) => Object.hasOwn(obj ?? {}, k));
+const is64Hex = (s) => typeof s === "string" && /^[0-9a-fA-F]{64}$/.test(s);
+const isUuid = (s) => typeof s === "string" && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(s);
+const parseSig = (v) => (typeof v === "string" && v.startsWith("v1=")) ? v.slice(3) : null;
+
+// UnsignedContractCall sanity (minimal, backend-specific fields may vary)
+function looksLikeUnsignedCall(call, expectFn) {
+  if (!call || typeof call !== "object") return false;
+  const have = ["contractAddress", "contractName", "functionName", "functionArgs"];
+  if (!have.every((k) => k in call)) return false;
+  if (expectFn && call.functionName !== expectFn) return false;
+  if (!Array.isArray(call.functionArgs)) return false;
+  return true;
+}
+
+// Validate public invoice projection minimally
+function looksLikePublicInvoice(i) {
+  return expectKeys(i, [
+    "idRaw", "idHex", "storeId",
+    "amountSats", "usdAtCreate", "quoteExpiresAt",
+    "merchantPrincipal", "status", "createdAt",
+  ]);
+}
+function hasUnderscoreKeys(obj) {
+  return Object.keys(obj || {}).some((k) => k.includes("_"));
+}
+function looksLikePublicStoreProfile(p) {
+  const okKeys = ["displayName", "logoUrl", "brandColor", "supportEmail", "supportUrl"];
+  const hasSome = okKeys.some((k) => k in (p || {}));
+  const noSecrets = !("apiKey" in (p || {})) && !("hmacSecret" in (p || {}));
+  return hasSome && noSecrets && !hasUnderscoreKeys(p);
+}
+function looksLikePrivateStoreProfile(p) {
+  const must = ["id", "principal", "active"];
+  const hasMust = must.every((k) => k in (p || {}));
+  const hasSecrets = "apiKey" in (p || {}) || "hmacSecret" in (p || {});
+  return hasMust && !hasUnderscoreKeys(p) && hasSecrets;
+}
+// Minimal post-condition assertions (string search to avoid tight coupling)
+function hasTwoFungiblePC(unsignedCall, invoice, payerPrincipal) {
+  const pcs = unsignedCall?.postConditions || unsignedCall?.post_conditions;
+  if (!Array.isArray(pcs) || pcs.length < 2) return false;
+
+  const blob = JSON.stringify(pcs);
+  const amt = String(invoice?.amountSats ?? "");
+  const merchant = invoice?.merchantPrincipal ?? "";
+
+  const hasAmt = blob.includes(amt);
+  const hasMerchant = merchant && blob.includes(merchant);
+  const hasPayer = payerPrincipal ? blob.includes(payerPrincipal) : true;
+
+  // Optional: assert PCs reference the configured sBTC asset, if provided.
+  const sbtcOk = (SBTC_ADDRESS && SBTC_NAME)
+    ? blob.includes(`${SBTC_ADDRESS}::${SBTC_NAME}`)
+    : true;
+
+  return hasAmt && hasMerchant && hasPayer && sbtcOk;
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Webhook receiver (local) – captures and verifies signatures later
+// ───────────────────────────────────────────────────────────────────────────────
+function startWebhookReceiver() {
+  const captured = [];
+  const server = http.createServer(async (req, res) => {
+    if (req.method !== "POST") { res.statusCode = 404; return res.end(); }
+    if (!req.url || !req.url.startsWith("/hook")) { res.statusCode = 404; return res.end(); }
+    const chunks = [];
+    req.on("data", (d) => chunks.push(d));
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const ts = req.headers["x-webhook-timestamp"];
+      const sig = req.headers["x-webhook-signature"];
+      let json = null;
+      try { json = JSON.parse(raw); } catch {}
+      captured.push({ ts, sig, raw, json, headers: req.headers });
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  return new Promise((resolve, reject) => {
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      resolve({ server, port, url: `http://127.0.0.1:${port}/hook`, captured });
+    });
+    server.on("error", reject);
+  });
+}
+function verifyWebhookSig({ ts, sig, raw }, secret) {
+  if (!ts || !sig || !raw || !secret) return { ok: false, reason: "missing parts" };
+  const now = nowSec();
+  const skewOk = Math.abs(Number(ts) - now) <= 300;
+  const their = parseSig(String(sig));
+  if (!their) return { ok: false, reason: "bad sig format" };
+  const msg = `${ts}.${raw}`;
+  const our = crypto.createHmac("sha256", secret).update(msg).digest("hex");
+  const ok = crypto.timingSafeEqual(Buffer.from(our, "hex"), Buffer.from(their, "hex"));
+  return { ok: ok && skewOk, reason: ok ? (skewOk ? "ok" : "skew") : "mismatch" };
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Main
+// ───────────────────────────────────────────────────────────────────────────────
+let invoiceA = null;
+let invoiceExp = null;
+let sub = null;
+
+(async () => {
+  banner();
+  const results = [];
+
+  // Start webhook catcher (we'll patch store webhook_url to this)
+  const hook = await startWebhookReceiver();
+
+  // ── Healthcheck ─────────────────────────────────────────────────────────────
+  results.push(await step("health: GET /", async () => {
+    const j = await httpJson("GET", "/");
+    return j || true;
+  }));
+
+  // ── Admin auth guard (negative) ─────────────────────────────────────────────
+  results.push(await step("admin: endpoints require auth", async () => {
+    const res = await raw("GET", "/api/admin/stores", { "Content-Type": "application/json" });
+    return (res.status === 401 || res.status === 403);
+  }));
+
+  // ── Admin: create or fetch store ────────────────────────────────────────────
+  results.push(await step(
+    "admin: create store",
+    async () => {
+      const body = {
+        principal: MERCHANT_PRINCIPAL,
+        name: BRAND_NAME,
+        display_name: BRAND_NAME,
+        logo_url: "https://placehold.co/96x96",
+        brand_color: "#FF7A00",
+        allowed_origins: "http://localhost:5173,https://example.com",
+        webhook_url: "", // will set later to hook.url
+      };
+      try {
+        if (!STORE_ID) {
+          const created = await httpJson("POST", "/api/admin/stores", body, "admin");
+          STORE_ID = created.id;
+          return pass("admin: create store");
+        } else {
+          const list = await httpJson("GET", "/api/admin/stores", null, "admin");
+          const found = Array.isArray(list) && list.find((s) => s.id === STORE_ID);
+          return found ? pass("admin: store exists") : fail("admin: store exists", null, "STORE_ID not found");
+        }
+      } catch (e) {
+        if (e.status === 409) {
+          // Recover the existing store id so subsequent tests can run
+          const list = await httpJson("GET", "/api/admin/stores", null, "admin");
+          const found = Array.isArray(list)
+            ? list.find(s => s.principal === MERCHANT_PRINCIPAL)
+            : null;
+          if (found?.id) {
+            STORE_ID = found.id;
+            return pass("admin: create store (409 already exists)");
+          }
+          return fail("admin: create store", e, "409 but could not resolve existing store id");
+        }
+        return fail("admin: create store", e, e.body ? safeStr(e.body) : e.message);
+      }
+    },
+    [ need.env("MERCHANT_PRINCIPAL") ]
+  ));
+
+  // ── Public profile + CORS preflight ─────────────────────────────────────────
+  results.push(await step(
+    "public: GET /api/v1/stores/:id/public-profile",
+    async () => {
+      const j = await httpJson("GET", `/api/v1/stores/${STORE_ID}/public-profile`);
+      return looksLikePublicStoreProfile(j);
+    },
+    [ need.storeId() ]
+  ));
+  results.push(await step(
+    "public: CORS preflight allowed (public-profile)",
+    async () => {
+      const goodOrigin = "http://localhost:5173";
+      const res = await options(`/api/v1/stores/${STORE_ID}/public-profile`, goodOrigin, "public", "GET");
+      return corsAllowed(res, goodOrigin) &&
+             allowHeadersContain(res, ["Content-Type", "X-API-Key", "X-Webhook-Timestamp", "X-Webhook-Signature"]);
+    },
+    [ need.storeId() ]
+  ));
+
+  // Activate store (idempotent)
+  results.push(await step(
+    "admin: activate store",
+    async () => {
+      const j = await httpJson("PATCH", `/api/admin/stores/${STORE_ID}/activate`, { active: true }, "admin");
+      return j?.active === true;
+    },
+    [ need.storeId() ]
+  ));
+
+  // Rotate keys (one-time response in POC)
+  results.push(await step(
+    "admin: rotate-keys",
+    async () => {
+      try {
+        const j = await httpJson("POST", `/api/admin/stores/${STORE_ID}/rotate-keys`, null, "admin");
+        MERCHANT_API_KEY = j.apiKey || j.api_key;
+        HMAC_SECRET = j.hmacSecret || j.hmac_secret;
+        if (!MERCHANT_API_KEY || !HMAC_SECRET) return fail("admin: rotate-keys", null, "missing keys in response");
+        return pass("admin: rotate-keys");
+      } catch (e) {
+        return fail("admin: rotate-keys", e, e.body ? safeStr(e.body) : e.message);
+      }
+    },
+    [ need.storeId() ]
+  ));
+
+  results.push(await step(
+    "admin: rotate-keys second call does not leak secrets",
+    async () => {
+      try {
+        const j2 = await httpJson("POST", `/api/admin/stores/${STORE_ID}/rotate-keys`, null, "admin");
+        const noSecrets = !("apiKey" in (j2 || {})) && !("hmacSecret" in (j2 || {}));
+        return noSecrets || fail("admin: rotate-keys second call does not leak secrets", j2, "secrets re-exposed");
+      } catch (e) {
+        return (e.status === 409 || e.status === 403)
+          ? pass("admin: rotate-keys second call does not leak secrets")
+          : fail("admin: rotate-keys second call", e);
+      }
+    },
+    [ need.storeId() ]
+  ));
+
+  // Optional merchant-side rotate-keys route
+  results.push(await step(
+    "merchant: rotate-keys (optional route)",
+    async () => {
+      try {
+        const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/rotate-keys`, null, "merchant");
+        const apiKey = j.apiKey || j.api_key;
+        const hmac = j.hmacSecret || j.hmac_secret;
+        if (apiKey && hmac) {
+          MERCHANT_API_KEY = apiKey;   // keep headers in sync with DB
+          HMAC_SECRET = hmac;
+          return pass("merchant: rotate-keys (optional route)");
+        }
+        return skip("merchant: rotate-keys (optional route)", "no secrets returned");
+      } catch (e) {
+        return (e.status === 404 || e.status === 405 || e.status === 403)
+          ? skip("merchant: rotate-keys (optional route)", `route not enabled (${e.status})`)
+          : fail("merchant: rotate-keys (optional route)", e);
+      }
+    },
+    [ need.storeId() ]
+  ));
+
+  // ── Merchant private profile GET/PATCH (also set webhook to local receiver) ─
+  results.push(await step(
+    "merchant: GET store private profile",
+    async () => {
+      const j = await httpJson("GET", `/api/v1/stores/${STORE_ID}/profile`, null, "merchant");
+      return looksLikePrivateStoreProfile(j);
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+  results.push(await step(
+    "merchant: PATCH store profile (branding, CORS, webhook_url)",
+    async () => {
+      const body = {
+        display_name: `${BRAND_NAME} (Updated)`,
+        brand_color: "#00A3FF",
+        allowed_origins: "http://localhost:5173,https://example.com",
+        webhook_url: hook.url,
+      };
+      const j = await httpJson("PATCH", `/api/v1/stores/${STORE_ID}/profile`, body, "merchant");
+      const ok = j?.displayName?.includes("(Updated)") && j?.brandColor === "#00A3FF";
+      return ok && looksLikePrivateStoreProfile(j);
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+
+  // ── Admin: sync-onchain (unsigned calls) ────────────────────────────────────
+  results.push(await step(
+    "admin: sync-onchain returns calls",
+    async () => {
+      const j = await httpJson("POST", `/api/admin/stores/${STORE_ID}/sync-onchain`, null, "admin");
+      return Array.isArray(j?.calls) && j.calls.length > 0 && looksLikeUnsignedCall(j.calls[0]);
+    },
+    [ need.storeId() ]
+  ));
+
+  // Set sBTC token (optional based on env)
+  results.push(await step(
+    "admin: set-sbtc-token returns call",
+    async () => {
+      const j = await httpJson("POST", `/api/admin/set-sbtc-token`, {
+        contractAddress: SBTC_ADDRESS,
+        contractName: SBTC_NAME
+      }, "admin");
+      return looksLikeUnsignedCall(j?.call, "set-sbtc-token");
+    },
+    [ need.env("SBTC_CONTRACT_ADDRESS"), need.env("SBTC_CONTRACT_NAME") ]
+  ));
+
+  // ── Merchant auth guard (negative) ──────────────────────────────────────────
+  results.push(await step(
+    "merchant: endpoints require X-API-Key",
+    async () => {
+      const res = await raw("GET", `/api/v1/stores/${STORE_ID}/invoices`, { "Content-Type": "application/json" });
+      return (res.status === 401 || res.status === 403);
+    },
+    [ need.storeId() ]
+  ));
+  results.push(await step(
+    "merchant: wrong X-API-Key is rejected",
+    async () => {
+      const res = await raw("GET", `/api/v1/stores/${STORE_ID}/invoices`, { "Content-Type": "application/json", "X-API-Key": "bogus" });
+      return (res.status === 401 || res.status === 403);
+    },
+    [ need.storeId() ]
+  ));
+
+  // ── Merchant: create invoice (happy path) ───────────────────────────────────
+  results.push(await step(
+    "merchant: create-invoice",
+    async () => {
+      const body = { amount_sats: 25000, ttl_seconds: 300, memo: "Test A" };
+      const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/invoices`, body, "merchant");
+      invoiceA = j;
+      const shapeOk = looksLikePublicInvoice(j);
+      const txOk = !j.unsignedTx || looksLikeUnsignedCall(j.unsignedTx, "pay-invoice");
+      const hasMagic = typeof j.magicLink === "string";
+      const usdOk = typeof j.usdAtCreate === "number";
+      const idsOk = isUuid(j.idRaw) && is64Hex(j.idHex);
+      return shapeOk && txOk && hasMagic && usdOk && idsOk;
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+
+  // Public: GET /i/:invoiceId (DTO) + camelCase + CORS preflight
+  results.push(await step(
+    "public: GET /i/:invoiceId returns invoice",
+    async () => {
+      const j = await httpJson("GET", `/i/${invoiceA.idRaw}`);
+      return looksLikePublicInvoice(j) && j.idRaw === invoiceA.idRaw && !hasUnderscoreKeys(j);
+    },
+    [ need.invoiceA() ]
+  ));
+  results.push(await step(
+    "public: CORS preflight allowed (GET /i/:id)",
+    async () => {
+      const res = await options(`/i/${invoiceA.idRaw}`, "http://localhost:5173", "public", "GET");
+      return corsAllowed(res, "http://localhost:5173") &&
+             allowHeadersContain(res, ["Content-Type", "X-API-Key", "X-Webhook-Timestamp", "X-Webhook-Signature"]);
+    },
+    [ need.invoiceA() ]
+  ));
+
+  // Public: POST /create-tx (+ 2 post-conditions)
+  results.push(await step(
+    "public: create-tx builds pay-invoice (+2 post-conditions)",
+    async () => {
+      const call = await httpJson("POST", `/create-tx`, {
+        invoiceId: invoiceA.idRaw, payerPrincipal: DUMMY_PAYER
+      });
+      const shape = looksLikeUnsignedCall(call, "pay-invoice");
+      const pcs = hasTwoFungiblePC(call, invoiceA, DUMMY_PAYER);
+      return shape && pcs;
+    },
+    [ need.invoiceA() ]
+  ));
+  // CORS preflight for /create-tx (good origin)
+  results.push(await step(
+    "public: CORS preflight allowed (create-tx)",
+    async () => {
+      const goodOrigin = "http://localhost:5173";
+      const res = await options(`/create-tx`, goodOrigin, "public", "POST");
+      return corsAllowed(res, goodOrigin) &&
+             allowHeadersContain(res, ["Content-Type", "X-API-Key", "X-Webhook-Timestamp", "X-Webhook-Signature"]);
+    }
+  ));
+  // CORS should block bad origin
+  results.push(await step(
+    "public: CORS preflight blocks disallowed origin (create-tx)",
+    async () => {
+      const bad = "https://evil.tld";
+      const res = await options(`/create-tx`, bad, "public", "POST");
+      const v = res.headers.get("access-control-allow-origin");
+      return !v || v !== bad;
+    }
+  ));
+
+  // Merchant list/filter + single get
+  results.push(await step(
+    "merchant: list invoices (?status=unpaid)",
+    async () => {
+      const list = await httpJson("GET", `/api/v1/stores/${STORE_ID}/invoices?status=unpaid`, null, "merchant");
+      return Array.isArray(list);
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+  results.push(await step(
+    "merchant: GET /invoices/:invoiceId",
+    async () => {
+      const j = await httpJson("GET", `/api/v1/stores/${STORE_ID}/invoices/${invoiceA.idRaw}`, null, "merchant");
+      return looksLikePublicInvoice(j) && j.idRaw === invoiceA.idRaw;
+    },
+    [ need.storeId(), need.apiKey(), need.invoiceA() ]
+  ));
+
+  // ── Cancel unpaid (merchant) then ensure create-tx rejects ──────────────────
+  results.push(await step(
+    "merchant: cancel unpaid invoice",
+    async () => {
+      const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/invoices/${invoiceA.idRaw}/cancel`, null, "merchant");
+      return (j?.canceled === true && j?.invoiceId === invoiceA.idRaw) || looksLikeUnsignedCall(j?.unsignedPayload, "cancel-invoice");
+    },
+    [ need.storeId(), need.apiKey(), need.invoiceA() ]
+  ));
+  results.push(await step(
+    "public: create-tx blocked after cancel",
+    async () => {
+      const res = await raw("POST", `/create-tx`, { "Content-Type": "application/json" }, { invoiceId: invoiceA.idRaw, payerPrincipal: DUMMY_PAYER });
+      return res.status >= 400;
+    },
+    [ need.invoiceA() ]
+  ));
+
+  // ── Expiry path WITH webhook verification ───────────────────────────────────
+  results.push(await step(
+    "merchant: create short-ttl invoice (webhook test)",
+    async () => {
+      const body = { amount_sats: 1111, ttl_seconds: 2, memo: "Soon expires" };
+      const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/invoices`, body, "merchant");
+      invoiceExp = j;
+      return looksLikePublicInvoice(j);
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+  // wait > ttl; give poller time to emit webhook
+  results.push(await step(
+    "public: create-tx blocked on expired",
+    async () => {
+      await sleep(6000);
+      const res = await raw("POST", `/create-tx`, { "Content-Type": "application/json" }, { invoiceId: invoiceExp.idRaw, payerPrincipal: DUMMY_PAYER });
+      return res.status >= 400;
+    },
+    [ need.invoiceExp() ]
+  ));
+
+  results.push(await step(
+    "webhook: invoice-expired delivered & signed (HMAC, skew≤300s)",
+    async () => {
+      const hit = hook.captured.find(e => typeof e.raw === "string" && e.raw.includes(String(invoiceExp.idRaw)));
+      if (!hit) return skip("webhook: invoice-expired delivered & signed (HMAC, skew≤300s)", "no webhook captured (ok if backend emits later/off-chain)");
+      const v = verifyWebhookSig(hit, HMAC_SECRET);
+      return v.ok ? pass("webhook: invoice-expired delivered & signed (HMAC, skew≤300s)") : fail("webhook signature", v, v.reason);
+    },
+    [ need.invoiceExp(), need.hmac() ]
+  ));
+
+  results.push(await step(
+    "merchant: webhook logs include invoice-expired (optional)",
+    async () => {
+      const logs = await httpJson("GET", `/api/v1/stores/${STORE_ID}/webhooks`, null, "merchant");
+      const blob = JSON.stringify(logs || []);
+      return blob.includes("invoice-expired") && blob.includes(invoiceExp.idRaw)
+        ? true
+        : skip("merchant: webhook logs include invoice-expired (optional)", "not found (ok if emitted differently)");
+    },
+    [ need.storeId(), need.apiKey(), need.invoiceExp() ]
+  ));
+
+  // ── Public: create-tx rejects malformed/unknown invoice IDs ─────────────────
+  results.push(await step("public: create-tx rejects bad invoiceId (not a uuid)", async () => {
+    const res = await raw("POST", `/create-tx`, { "Content-Type": "application/json" }, { invoiceId: "not-a-uuid", payerPrincipal: DUMMY_PAYER });
+    return res.status >= 400;
+  }));
+  results.push(await step("public: create-tx rejects unknown invoiceId", async () => {
+    const res = await raw("POST", `/create-tx`, { "Content-Type": "application/json" }, { invoiceId: "11111111-1111-1111-1111-111111111111", payerPrincipal: DUMMY_PAYER });
+    return res.status >= 400;
+  }));
+
+  // ── Rate-limit smoke on /create-tx (may BLOCK if not implemented) ───────────
+  results.push(await step(
+    "public: /create-tx rate-limit smoke",
+    async () => {
+      const attempts = 15;
+      let saw429 = false;
+      const reqs = [];
+      for (let i = 0; i < attempts; i++) {
+        const badId = (i % 2 === 0) ? "11111111-1111-1111-1111-111111111111" : "not-a-uuid";
+        reqs.push(
+          raw("POST", `/create-tx`, { "Content-Type": "application/json" }, { invoiceId: badId, payerPrincipal: DUMMY_PAYER })
+            .then(r => { if (r.status === 429) saw429 = true; })
+            .catch(() => {})
+        );
+      }
+      await Promise.all(reqs);
+      return saw429 ? true : skip("public: /create-tx rate-limit smoke", "no 429 observed (threshold high or not enabled)");
+    }
+  ));
+
+  // ── Refunds: refund on unpaid must error via API ────────────────────────────
+  results.push(await step(
+    "merchant: create invoice (refund-negative test)",
+    async () => {
+      const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/invoices`, { amount_sats: 3333, ttl_seconds: 300, memo: "Refund test" }, "merchant");
+      invoiceA = j; // reuse container, not important for later steps
+      return looksLikePublicInvoice(j);
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+  results.push(await step(
+    "merchant: refund unpaid is rejected (4xx)",
+    async () => {
+      const res = await raw("POST", `/api/v1/stores/${STORE_ID}/refunds`, { ...merchantHeaders() }, { invoice_id: invoiceA.idRaw, amount_sats: 1000, memo: "nope" });
+      return res.status >= 400;
+    },
+    [ need.storeId(), need.apiKey(), need.invoiceA() ]
+  ));
+
+  // ── Subscriptions ───────────────────────────────────────────────────────────
+  results.push(await step(
+    "merchant: create subscription (invoice mode)",
+    async () => {
+      const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/subscriptions`,
+        { subscriber: DUMMY_PAYER, amount_sats: 777, interval_blocks: 3, mode: "invoice" }, "merchant");
+      sub = j;
+      return expectKeys(j, ["id", "storeId", "subscriber", "amountSats", "intervalBlocks", "active", "mode"]);
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+
+  results.push(await step(
+    "merchant: sub → invoice (magicLink present)",
+    async () => {
+      const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/subscriptions/${sub.id}/invoice`, { ttl_seconds: 300, memo: "From sub" }, "merchant");
+      return looksLikePublicInvoice(j) && typeof j.magicLink === "string";
+    },
+    [ need.storeId(), need.apiKey(), need.subId() ]
+  ));
+
+  results.push(await step(
+    "merchant: sub direct create-tx without payerPrincipal rejected",
+    async () => {
+      // switch to direct first
+      await httpJson("POST", `/api/v1/stores/${STORE_ID}/subscriptions/${sub.id}/mode`, { mode: "direct" }, "merchant");
+      const res = await raw("POST", `/api/v1/stores/${STORE_ID}/subscriptions/${sub.id}/create-tx`, { ...merchantHeaders() }, { /* missing payerPrincipal */ });
+      return res.status >= 400;
+    },
+    [ need.storeId(), need.apiKey(), need.subId() ]
+  ));
+
+  results.push(await step(
+    "merchant: sub direct create-tx ok",
+    async () => {
+      const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/subscriptions/${sub.id}/create-tx`, { payerPrincipal: DUMMY_PAYER }, "merchant");
+      return looksLikeUnsignedCall(j, "pay-subscription");
+    },
+    [ need.storeId(), need.apiKey(), need.subId() ]
+  ));
+
+  results.push(await step(
+    "merchant: cancel subscription",
+    async () => {
+      const j = await httpJson("POST", `/api/v1/stores/${STORE_ID}/subscriptions/${sub.id}/cancel`, null, "merchant");
+      return (j?.canceled === true) || looksLikeUnsignedCall(j?.unsignedTx, "cancel-subscription");
+    },
+    [ need.storeId(), need.apiKey(), need.subId() ]
+  ));
+
+  // ── Webhooks & Poller views ─────────────────────────────────────────────────
+  results.push(await step(
+    "merchant: GET webhook logs",
+    async () => {
+      const j = await httpJson("GET", `/api/v1/stores/${STORE_ID}/webhooks`, null, "merchant");
+      return Array.isArray(j);
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+  results.push(await step(
+    "admin: poller status",
+    async () => {
+      const j = await httpJson("GET", `/api/admin/poller`, null, "admin");
+      return expectKeys(j, ["running", "lastRunAt", "lastHeight", "lastTxId", "lagBlocks"]);
+    }
+  ));
+  results.push(await step(
+    "admin: poller restart toggles",
+    async () => {
+      const j = await httpJson("POST", `/api/admin/poller/restart`, null, "admin");
+      return typeof j?.running === "boolean";
+    }
+  ));
+
+  // Admin webhooks list/retry
+  results.push(await step(
+    "admin: GET webhooks (all)",
+    async () => {
+      const j = await httpJson("GET", `/api/admin/webhooks?status=all&storeId=${encodeURIComponent(STORE_ID)}`, null, "admin");
+      return Array.isArray(j);
+    },
+    [ need.storeId() ]
+  ));
+  results.push(await step(
+    "admin: retry first failed webhook (if any)",
+    async () => {
+      const j = await httpJson("GET", `/api/admin/webhooks?status=failed&storeId=${encodeURIComponent(STORE_ID)}`, null, "admin");
+      const first = Array.isArray(j) ? j.find(x => x.success === false) : null;
+      if (!first) return skip("admin: retry first failed webhook (if any)", "no failed logs");
+      const r = await httpJson("POST", `/api/admin/webhooks/retry`, { webhookLogId: first.id }, "admin");
+      return (r?.enqueued === true) || (r?.alreadyDelivered === true);
+    },
+    [ need.storeId() ]
+  ));
+
+  // ── Admin listings (camelCase; idHex 64-hex) ────────────────────────────────
+  results.push(await step(
+    "admin: list stores (camelCase)",
+    async () => {
+      const j = await httpJson("GET", "/api/admin/stores", null, "admin");
+      const ok = Array.isArray(j) && j.length >= 1;
+      const noSnake = ok ? !hasUnderscoreKeys(j[0]) : false;
+      return ok && noSnake;
+    }
+  ));
+  results.push(await step(
+    "admin: list invoices (camelCase + idHex)",
+    async () => {
+      const j = await httpJson("GET", `/api/admin/invoices?status=&storeId=${encodeURIComponent(STORE_ID || "")}`, null, "admin");
+      if (!Array.isArray(j)) return false;
+      const any = j[0];
+      return !any || (!hasUnderscoreKeys(any) && (any.idHex ? is64Hex(any.idHex) : true));
+    }
+  ));
+
+  // ── Admin cancel unpaid invoice (Node-only op) ──────────────────────────────
+  results.push(await step(
+    "admin: cancel unpaid invoice",
+    async () => {
+      let tmpInv = null;
+      try {
+        tmpInv = await httpJson("POST", `/api/v1/stores/${STORE_ID}/invoices`,
+          { amount_sats: 2222, ttl_seconds: 300, memo: "Admin cancel test" }, "merchant");
+      } catch { /* ignore */ }
+      if (!tmpInv?.idRaw) return skip("admin: cancel unpaid invoice", "could not create temp invoice");
+      const j = await httpJson("POST", `/api/admin/invoices/${tmpInv.idRaw}/cancel`, null, "admin");
+      return j?.canceled === true && j?.invoiceId === tmpInv.idRaw;
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+
+  // ── Active merchant enforcement (Node-only checks) ──────────────────────────
+  results.push(await step(
+    "admin: deactivate store",
+    async () => {
+      const j = await httpJson("PATCH", `/api/admin/stores/${STORE_ID}/activate`, { active: false }, "admin");
+      return j?.active === false;
+    },
+    [ need.storeId() ]
+  ));
+  results.push(await step(
+    "merchant: create-invoice blocked when inactive",
+    async () => {
+      const res = await raw("POST", `/api/v1/stores/${STORE_ID}/invoices`, { ...merchantHeaders() }, { amount_sats: 1000, ttl_seconds: 60 });
+      return res.status >= 400;
+    },
+    [ need.storeId(), need.apiKey() ]
+  ));
+  results.push(await step(
+    "public: create-tx blocked when merchant inactive",
+    async () => {
+      if (!invoiceA?.idRaw) return skip("public: create-tx blocked when merchant inactive", "no earlier invoice to reuse");
+      const res = await raw("POST", `/create-tx`, { "Content-Type": "application/json" }, { invoiceId: invoiceA.idRaw, payerPrincipal: DUMMY_PAYER });
+      return res.status >= 400;
+    },
+    [ need.storeId() ] // invoiceA checked inside
+  ));
+  results.push(await step(
+    "admin: reactivate store",
+    async () => {
+      const j = await httpJson("PATCH", `/api/admin/stores/${STORE_ID}/activate`, { active: true }, "admin");
+      return j?.active === true;
+    },
+    [ need.storeId() ]
+  ));
+
+  // ── Report ──────────────────────────────────────────────────────────────────
+  console.log("");
+  console.log(c.bold("Test Summary"));
+  let counts = { PASS:0, FAIL:0, SKIP:0, BLOCKED:0 }, i = 1;
+  for (const r of results) {
+    printResult(r, i++);
+    counts[r.status] = (counts[r.status] || 0) + 1;
+  }
+  console.log("");
+  console.log(
+    `Result: `
+    + c.green(`${counts.PASS} passed`) + " / "
+    + (counts.FAIL ? c.red(`${counts.FAIL} failed`) : "0 failed") + " / "
+    + (counts.SKIP ? c.yellow(`${counts.SKIP} skipped`) : "0 skipped") + " / "
+    + (counts.BLOCKED ? c.dim(`${counts.BLOCKED} blocked`) : "0 blocked")
+  );
+
+  // clean up webhook server
+  hook.server.close();
+
+  process.exit(counts.FAIL ? 1 : 0);
+})().catch((err) => {
+  console.error(c.red("Fatal error in server selftest:"), err);
+  process.exit(1);
+});

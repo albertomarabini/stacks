@@ -1,4 +1,4 @@
-// /frontend/checkout/delegates/PublicCheckoutApiClient.ts
+// ../checkout/delegates/PublicCheckoutApiClient.ts
 import { PublicInvoiceDTO, StorePublicProfileDTO } from '/src/contracts/domain';
 
 export class PublicCheckoutApiClient {

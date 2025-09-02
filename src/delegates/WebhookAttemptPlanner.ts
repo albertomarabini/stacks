@@ -1,7 +1,7 @@
 // src/delegates/WebhookAttemptPlanner.ts
 import crypto from 'crypto';
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { WebhookLogRow } from '/src/contracts/domain';
+import type { ISqliteStore } from '../contracts/dao';
+import type { WebhookLogRow } from '../contracts/domain';
 
 type RecordCtx = {
   storeId: string;

@@ -4,9 +4,9 @@ import type {
   IAssetInfoFactory,
   IConfigService,
   IStacksChainClient,
-} from '/src/contracts/interfaces';
-import { InvoiceIdGuard } from '/src/delegates/InvoiceIdGuard';
-import { Validation } from '/src/validation/rules';
+} from '../contracts/interfaces';
+import { InvoiceIdGuard } from '../delegates/InvoiceIdGuard';
+import { Validation } from '../validation/rules';
 
 type InvoiceRowForTx = {
   id_hex: string;
@@ -53,32 +53,33 @@ export class PayInvoiceTxAssembler {
     payerPrincipal?: string,
   ): Promise<any> {
     const isActive =
-      typeof row.store.active === 'boolean' ? row.store.active : row.store.active === 1;
-    if (!isActive) {
-      throw new HttpError(422, 'merchant-inactive');
-    }
+      typeof row.store.active === 'boolean'
+        ? row.store.active
+        : row.store.active === 1;
+    if (!isActive) throw new HttpError(422, 'merchant-inactive');
 
-    try {
-      this.idGuard.validateHexIdOrThrow(row.id_hex);
-    } catch {
-      throw new HttpError(400, 'invalid-id');
-    }
+    this.idGuard.validateHexIdOrThrow(row.id_hex);
 
-    const onchain = await this.chain.readInvoiceStatus(row.id_hex);
-    const ttlExpired = Date.now() > row.quote_expires_at;
-    if (ttlExpired || onchain === 'expired') {
-      throw new HttpError(409, 'expired');
-    }
-    if (onchain === 'paid' || onchain === 'canceled' || this.nonPayableStatuses.has(row.status)) {
-      throw new HttpError(409, 'invalid-state');
-    }
-
+    // ── fail fast if the platform isn't configured with sBTC ─────────────
     const tokenId = this.cfg.getSbtcContractId();
     if (!tokenId) {
+      // controller maps this to HTTP 422 → { error: "missingSbtcToken" }
       throw new HttpError(422, 'missing-token');
     }
-    // Surface potential misconfiguration eagerly
+    // Surface misconfig early (throws if malformed)
     this.aif.getSbtcAssetInfo();
+
+    // ── Status/TTL checks AFTER config sanity ─────────────────────────────────
+    const onchain = await this.chain.readInvoiceStatus(row.id_hex);
+    const ttlExpired = Date.now() > row.quote_expires_at;
+    if (ttlExpired || onchain === 'expired') throw new HttpError(409, 'expired');
+    if (
+      onchain === 'paid' ||
+      onchain === 'canceled' ||
+      this.nonPayableStatuses.has(row.status)
+    ) {
+      throw new HttpError(409, 'invalid-state');
+    }
 
     const effectivePayer =
       typeof payerPrincipal === 'string' && payerPrincipal.length > 0

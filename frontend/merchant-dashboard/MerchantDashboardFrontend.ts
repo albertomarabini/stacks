@@ -1,19 +1,19 @@
-// /frontend/merchant-dashboard/MerchantDashboardFrontend.ts
-import { RequestShapeAdapter } from '/frontend/merchant-dashboard/adapters/RequestShapeAdapter';
-import { MerchantApiHttpClient } from '/frontend/merchant-dashboard/http/MerchantApiHttpClient';
-import { RefundFlowCoordinator } from '/frontend/merchant-dashboard/flows/RefundFlowCoordinator';
-import { InvoiceListViewModel } from '/frontend/merchant-dashboard/viewmodels/InvoiceListViewModel';
-import { SubscriptionsCoordinator } from '/frontend/merchant-dashboard/subscriptions/SubscriptionsCoordinator';
-import { WebhookConsoleCoordinator } from '/frontend/merchant-dashboard/webhooks/WebhookConsoleCoordinator';
-import { StoreProfileCoordinator } from '/frontend/merchant-dashboard/profile/StoreProfileCoordinator';
-import { KeyRotationCoordinator } from '/frontend/merchant-dashboard/keys/KeyRotationCoordinator';
+// ../merchant-dashboard/MerchantDashboardFrontend.ts
+import { RequestShapeAdapter } from '../merchant-dashboard/adapters/RequestShapeAdapter';
+import { MerchantApiHttpClient } from '../merchant-dashboard/http/MerchantApiHttpClient';
+import { RefundFlowCoordinator } from '../merchant-dashboard/flows/RefundFlowCoordinator';
+import { InvoiceListViewModel } from '../merchant-dashboard/viewmodels/InvoiceListViewModel';
+import { SubscriptionsCoordinator } from '../merchant-dashboard/subscriptions/SubscriptionsCoordinator';
+import { WebhookConsoleCoordinator } from '../merchant-dashboard/webhooks/WebhookConsoleCoordinator';
+import { StoreProfileCoordinator } from '../merchant-dashboard/profile/StoreProfileCoordinator';
+import { KeyRotationCoordinator } from '../merchant-dashboard/keys/KeyRotationCoordinator';
 import {
   PublicInvoiceDTO,
   StorePrivateProfileDTO,
   SubscriptionMode,
   InvoiceStatus,
   UnsignedContractCall,
-} from '/src/contracts/domain';
+} from '../../src/contracts/domain';
 
 type SubscriptionItem = {
   id: string;

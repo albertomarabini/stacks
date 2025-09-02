@@ -1,17 +1,18 @@
 // src/schedulers/SubscriptionScheduler.ts
-import { makeContractCall, broadcastTransaction, AnchorMode } from '@stacks/transactions';
-import { StacksMainnet, StacksTestnet, StacksMocknet } from '@stacks/network';
+import { makeContractCall, broadcastTransaction } from '@stacks/transactions';
+import { STACKS_MAINNET, STACKS_TESTNET, STACKS_DEVNET, STACKS_MOCKNET } from '@stacks/network';
+
 import type {
   IStacksChainClient,
   IContractCallBuilder,
   IConfigService,
   IInvoiceIdCodec,
   IWebhookDispatcher,
-} from '/src/contracts/interfaces';
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { SubscriptionRow } from '/src/contracts/domain';
-import { PricingService } from '/src/services/PricingService';
-import { SubscriptionInvoicePlanner } from '/src/delegates/SubscriptionInvoicePlanner';
+} from '../contracts/interfaces';
+import type { ISqliteStore } from '../contracts/dao';
+import type { SubscriptionRow } from '../contracts/domain';
+import { PricingService } from '../services/PricingService';
+import { SubscriptionInvoicePlanner } from '../delegates/SubscriptionInvoicePlanner';
 
 type BroadcastInput = {
   idBuf32: Uint8Array;
@@ -159,15 +160,15 @@ export class SubscriptionScheduler {
       throw new Error('auto_broadcast_disabled');
     }
 
-    const senderKey = String(process.env.SCHEDULER_SENDER_KEY || '');
+    const senderKey = String(process.env.SCHEDULER_SENDER_KEY ?? process.env.SIGNER_PRIVATE_KEY ?? '');
     const { contractAddress, contractName, functionName, functionArgs } = payload;
     const networkName = this.cfg.getNetwork();
+
     const network =
-      networkName === 'mainnet'
-        ? new StacksMainnet()
-        : networkName === 'testnet'
-        ? new StacksTestnet()
-        : new StacksMocknet();
+      networkName === 'mainnet' ? STACKS_MAINNET :
+      networkName === 'testnet' ? STACKS_TESTNET :
+      networkName === 'devnet'  ? STACKS_DEVNET  :
+      STACKS_MOCKNET;
 
     const tx = await makeContractCall({
       contractAddress,
@@ -175,11 +176,11 @@ export class SubscriptionScheduler {
       functionName,
       functionArgs,
       senderKey,
-      network,
-      anchorMode: AnchorMode.Any,
+      network
+      // anchorMode removed — not part of SignedContractCallOptions in v7
     });
 
-    const resp: any = await broadcastTransaction(tx, network);
+    const resp: any = await broadcastTransaction({ transaction: tx, network });
     if (typeof resp === 'string') return resp;
     if (resp && typeof resp.txid === 'string') return resp.txid;
     throw new Error('broadcast_failed');

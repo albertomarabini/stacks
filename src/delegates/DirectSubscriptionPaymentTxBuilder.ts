@@ -1,6 +1,6 @@
 // src/delegates/DirectSubscriptionPaymentTxBuilder.ts
-import type { IStacksChainClient, IContractCallBuilder, IInvoiceIdCodec } from '/src/contracts/interfaces';
-import type { SubscriptionRow, UnsignedContractCall } from '/src/contracts/domain';
+import type { IStacksChainClient, IContractCallBuilder, IInvoiceIdCodec } from '../contracts/interfaces';
+import type { SubscriptionRow, UnsignedContractCall } from '../contracts/domain';
 
 export class DirectSubscriptionPaymentTxBuilder {
   constructor(

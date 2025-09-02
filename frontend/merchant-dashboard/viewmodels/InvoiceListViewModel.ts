@@ -1,4 +1,4 @@
-// /frontend/merchant-dashboard/viewmodels/InvoiceListViewModel.ts
+// ../merchant-dashboard/viewmodels/InvoiceListViewModel.ts
 import { PublicInvoiceDTO, InvoiceStatus } from '/src/contracts/domain';
 
 export class InvoiceListViewModel {

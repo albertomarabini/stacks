@@ -1,5 +1,5 @@
 // src/delegates/MerchantInputValidator.ts
-import { Validation } from '/src/validation/rules';
+import { Validation } from '../validation/rules';
 
 export class MerchantInputValidator {
   validateCreateInvoiceBody(body: any): {
@@ -37,30 +37,40 @@ export class MerchantInputValidator {
     return { amountSats, ttlSeconds, memo, webhookUrl };
   }
 
-  validateRefundBody(body: any): {
+  public validateRefundBody(body: Record<string, unknown>): {
     invoiceId: string;
     amountSats: number;
     memo?: string;
   } {
-    const invoiceId = String(body?.invoice_id ?? '');
-    if (!Validation.uuid.test(invoiceId)) {
-      throw new TypeError('invalid invoice_id');
+    const b = body || {};
+
+    // accept snake_case or camelCase
+    const invoiceId = String(
+      (b as any).invoice_id ?? (b as any).invoiceId ?? ''
+    ).trim();
+    const amountSatsRaw = (b as any).amount_sats ?? (b as any).amountSats;
+    const amountSats = Number(amountSatsRaw);
+
+    // same memo handling (limit per Steroids)
+    const memoMax = Validation.refund.memoMaxUtf8Bytes;
+    let memo: string | undefined;
+    if (typeof (b as any).memo === 'string') {
+      const enc = new TextEncoder().encode((b as any).memo);
+      memo = new TextDecoder().decode(enc.subarray(0, memoMax));
     }
 
-    const amountSats = Number(body?.amount_sats);
+    // current project uses regexes on Validation, not methods
+    if (!invoiceId || !Validation.uuid.test(invoiceId)) {
+      throw new TypeError('invalid invoice_id');
+    }
     if (!Number.isInteger(amountSats) || amountSats <= 0) {
       throw new TypeError('invalid amount_sats');
     }
 
-    let memo: string | undefined;
-    if (body?.memo !== undefined && body.memo !== null) {
-      const str = String(body.memo);
-      const buf = Buffer.from(str, 'utf8').subarray(0, Validation.refund.memoMaxUtf8Bytes);
-      memo = buf.toString('utf8');
-    }
-
+    // NOTICE: return **camelCase** (controller expects this)
     return { invoiceId, amountSats, memo };
   }
+
 
   assertStacksPrincipal(p: string): void {
     if (!Validation.stacksPrincipal.test(p)) {

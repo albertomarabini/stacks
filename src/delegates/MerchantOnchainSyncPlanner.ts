@@ -1,7 +1,7 @@
 // src/delegates/MerchantOnchainSyncPlanner.ts
-import type { ISqliteStore } from '/src/contracts/dao';
-import type { IStacksChainClient, IContractCallBuilder } from '/src/contracts/interfaces';
-import type { UnsignedContractCall } from '/src/contracts/domain';
+import type { ISqliteStore } from '../contracts/dao';
+import type { IStacksChainClient, IContractCallBuilder } from '../contracts/interfaces';
+import type { UnsignedContractCall } from '../contracts/domain';
 
 export class MerchantOnchainSyncPlanner {
   async planForStore(

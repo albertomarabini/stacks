@@ -1,5 +1,5 @@
 // src/delegates/SchedulerStartupCoordinator.ts
-import type { IConfigService } from '/src/contracts/interfaces';
+import type { IConfigService } from '../contracts/interfaces';
 
 export class SchedulerStartupCoordinator {
   private startedPoller = false;
