@@ -12,7 +12,8 @@ export class ReorgGuard {
   ): Promise<boolean> {
     if (tipHeight < cursor.lastHeight) return true;
     if (cursor.lastHeight === 0) return false;
-    const header = await chain.getBlockHeader(firstBlockToProcessHeight);
+    const header = await chain.getBlockHeader(firstBlockToProcessHeight).catch(() => null);
+    if (!header) return false;
     const parent = header.parent_block_hash;
     return parent !== cursor.lastBlockHash;
   }

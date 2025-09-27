@@ -51,10 +51,23 @@ export class InvoiceService {
     const idHex = this.codec.generateRandomBuff32Hex();
     this.codec.assertHex64(idHex);
 
-    const usdAtCreate = await this.pricing.getUsdPriceSnapshot();
+    let usdAtCreate: number;
+    try {
+      usdAtCreate = await this.pricing.getUsdPriceSnapshot();
+    } catch (e: any) {
+      if (e?.code === 'price_unavailable') {
+        // Accept invoice creation without a live USD quote (display-only in UI)
+        const fallback = Number(process.env.PRICE_SNAPSHOT_DEFAULT ?? 0);
+        usdAtCreate = Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
+      } else {
+        throw e;
+      }
+    }
     const tipHeight = await this.chain.getTipHeight();
     const avgBlockSecs = this.cfg.getAvgBlockSecs();
-    const expiresAtBlock = tipHeight + Math.ceil(input.ttlSeconds / avgBlockSecs);
+    const minCushionBlocks = 10;
+    const ttlBlocks = Math.ceil(input.ttlSeconds / avgBlockSecs);
+    const expiresAtBlock = tipHeight + Math.max(minCushionBlocks, ttlBlocks + 1);
 
     const unsignedTx = this.builder.buildCreateInvoice({
       idHex,

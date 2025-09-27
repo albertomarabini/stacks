@@ -79,6 +79,17 @@ function logAddrIfPresent(label: string, skRaw: string | undefined, netName: str
 
 export class ApplicationBootstrapper {
   private serverRef: import('http').Server | null = null;
+  private async waitFor<T>(fn: () => Promise<T | undefined>, ok: (v: T) => boolean, ms = 15000) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      try {
+        const v = await fn();
+        if (v && ok(v)) return v;
+      } catch {/* best-effort; keep polling */ }
+      await new Promise(r => setTimeout(r, 400));
+    }
+    throw new Error('timeout waiting for on-chain state');
+  }
 
   public async boot(): Promise<void> {
     log('START', 'starting…');
@@ -119,13 +130,13 @@ export class ApplicationBootstrapper {
       'CONFIG',
       `confirmations=${poll.minConfirmations} reorgWindow=${poll.reorgWindowBlocks} pollInterval=${poll.pollIntervalSecs}s avgBlockSecs=${avgBlockSecs}`
     );
-    log('CONFIG', `AUTO_BROADCAST=${env('AUTO_BROADCAST') ?? 'false'} GLOBAL_DEBUGGING=${env('GLOBAL_DEBUGGING') ?? '0'}`);
+    log('CONFIG', `AUTO_BOOTSTRAP_ADMIN=${env('AUTO_BOOTSTRAP_ADMIN') ?? 'false'} GLOBAL_DEBUGGING=${env('GLOBAL_DEBUGGING') ?? '0'}`);
 
     // Derive & log addresses from any provided secret keys (purely for debugging)
     logAddrIfPresent('ADMIN_SECRET_KEY', env('ADMIN_SECRET_KEY'), netName);
     logAddrIfPresent('MERCHANT_SECRET_KEY', env('MERCHANT_SECRET_KEY'), netName);
     logAddrIfPresent('PAYER_SECRET_KEY', env('PAYER_SECRET_KEY'), netName);
-    // Server signer (used only if AUTO_BROADCAST=true)
+    // Server signer (used only if AUTO_BOOTSTRAP_ADMIN=true)
     logAddrIfPresent('SIGNER_PRIVATE_KEY', env('SIGNER_PRIVATE_KEY'), netName);
 
     // 2) Database
@@ -260,6 +271,7 @@ export class ApplicationBootstrapper {
       subs: subsService,
       inv: invService,
       refund: refundService,
+      aif,
     });
 
     const adminCtrl = new AdminApiController();
@@ -270,6 +282,38 @@ export class ApplicationBootstrapper {
       dispatcher: dispatcher as any,
       pollerBridge,
     });
+
+    // inside ApplicationBootstrapper.boot(), after you construct `chain`, `builder`, `adminCtrl`, etc.
+    // In ApplicationBootstrapper.boot()
+    if (process.env.AUTO_BOOTSTRAP_ADMIN === '1' && process.env.SIGNER_PRIVATE_KEY) {
+      try {
+        // 1) Admin
+        const adminNow = await chain.readAdminPrincipal();
+        if (!adminNow) {
+          const unsigned = builder.buildBootstrapAdmin();
+          await chain.signAndBroadcast(unsigned, env('SIGNER_PRIVATE_KEY')!);
+          await this.waitFor(() => chain.readAdminPrincipal(), v => !!v);
+          log('BOOTSTRAP', 'on-chain admin set');
+        }
+
+        // 2) sBTC token
+        const sbtc = await chain.readSbtcToken();
+        if (!sbtc && env('SBTC_CONTRACT_ADDRESS') && env('SBTC_CONTRACT_NAME')) {
+          const unsigned = builder.buildSetSbtcToken({
+            contractAddress: env('SBTC_CONTRACT_ADDRESS')!,
+            contractName: env('SBTC_CONTRACT_NAME')!,
+          });
+          await chain.signAndBroadcast(unsigned, env('SIGNER_PRIVATE_KEY')!);
+          await this.waitFor(() => chain.readSbtcToken(), v => !!v);
+          log('BOOTSTRAP', 'sbtc-token configured');
+        }
+      } catch (e: any) {
+        // idempotent safety + visibility if it races
+        log('BOOTSTRAP', `skipped or failed: ${e?.message || e}`);
+      }
+    } else {
+      log('BOOTSTRAP', 'skipped (set AUTO_BOOTSTRAP_ADMIN=true and provide SIGNER_PRIVATE_KEY)');
+    }
 
     const healthCtrl = new HealthController();
 

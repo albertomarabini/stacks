@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "test": "node scripts/quick-sim.mjs",
-    "tesnet": "node ./scripts/run.mjs testnet",
-    "devnet": "node ./scripts/run.mjs devnet",
-    "simnet": "node ./scripts/run.mjs simnet",
+    "tesnet_test": "node ./scripts/run.mjs testnet",
+    "devnet_test": "node ./scripts/run.mjs devnet",
+    "simnet_test": "node ./scripts/run.mjs simnet",
     "devnet_start":"../bin/clarinet devnet start",
     "devnet_reset":"sudo ./scripts/devnet_reset.sh",
     "accounts":"../bin/clarinet console"

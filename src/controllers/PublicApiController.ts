@@ -31,9 +31,11 @@ const PublicErrors = {
   missingSbtcToken: { error: 'missingSbtcToken' },
 } as const;
 
+// ✳️ include "cancelled" defensively, though canonical is "canceled" in DB/specs
 const NonPayableStatuses = new Set([
   'paid',
   'canceled',
+  'cancelled',
   'expired',
   'refunded',
   'partially_refunded',
@@ -54,6 +56,30 @@ export class PublicApiController {
 
   private cors: any;
 
+  // Best-effort CORS header setter in case route middleware didn't run.
+  // If the store (or row.store) has an allow-list, reflect the Origin when allowed,
+  // otherwise fall back to "*". Also sets Vary: Origin when reflecting.
+  private setCorsIfMissing(req: Request, res: Response, allowListCsv?: string): void {
+    // already set by middleware? leave it alone
+    if (res.getHeader('Access-Control-Allow-Origin')) return;
+
+    const origin = String(req.headers.origin || '');
+    const list = (allowListCsv || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    // reflect when explicitly allowed; otherwise use "*"
+    const allow = (origin && list.length && list.includes(origin)) ? origin : '*';
+
+    res.setHeader('Access-Control-Allow-Origin', allow);
+    if (allow !== '*') {
+      // ensure caches don’t coalesce different origins
+      const prevVary = String(res.getHeader('Vary') || '').trim();
+      res.setHeader('Vary', prevVary ? `${prevVary}, Origin` : 'Origin');
+    }
+  }
+
   bindDependencies(deps: {
     store: ISqliteStore;
     chain: IStacksChainClient;
@@ -70,7 +96,8 @@ export class PublicApiController {
     this.codec = deps.codec;
 
     this.idGuard = new InvoiceIdGuard(this.codec);
-    this.statusResolver = new InvoiceStatusResolver(this.chain, this.idGuard as any);
+    // ✅ pass chain + idGuard only; resolver will duck-type the chain
+    this.statusResolver = new InvoiceStatusResolver(this.chain, this.idGuard);
     this.profileProjector = new StorePublicProfileProjector();
     this.txAssembler = new PayInvoiceTxAssembler(
       this.builder,
@@ -128,6 +155,9 @@ export class PublicApiController {
       store: storeProfile,
     };
 
+    // ensure CORS header for public GET (browser won't preflight)
+    const allowed = (row.store as any)?.allowed_origins || (row.store as any)?.allowedOrigins;
+    this.setCorsIfMissing(req, res, allowed);
     res.json(dto);
   }
 
@@ -137,34 +167,68 @@ export class PublicApiController {
     const payerPrincipal = body.payerPrincipal ? String(body.payerPrincipal) : undefined;
 
     if (!invoiceId) {
-      res.status(HttpStatusMap.invalidPayload).json(PublicErrors.missingIdentifier);
+      this.setCorsIfMissing(req, res); // no store context yet
+      res.status(400).json(PublicErrors.missingIdentifier);
       return;
     }
 
     const row = this.store.getInvoiceWithStore(invoiceId);
+    const allowFromRow = row ? ((row.store as any)?.allowed_origins || (row.store as any)?.allowedOrigins) : undefined;
+
     if (!row) {
-      res.status(HttpStatusMap.notFound).json(PublicErrors.notFound);
+      this.setCorsIfMissing(req, res);
+      res.status(404).json(PublicErrors.notFound);
+      return;
+    }
+
+    // ✳️ Harden: compute effective status (DB + on-chain) before building.
+    let effectiveStatus = String(row.status || '').toLowerCase();
+    try {
+      // Validate that the stored id_hex is sane; if invalid, we will surface invalidId below
+      this.idGuard.validateHexIdOrThrow(row.id_hex);
+      const onchain = await this.statusResolver.readOnchainStatus(row.id_hex);
+      effectiveStatus = this.statusResolver.computeDisplayStatus(
+        { id_hex: row.id_hex, status: effectiveStatus as any, quote_expires_at: row.quote_expires_at },
+        onchain as any,
+        Date.now(),
+      ).toLowerCase();
+    } catch (e) {
+      // If id invalid, map to 400; otherwise continue with DB status.
+      if (e instanceof Error && /invalid/i.test(e.message)) {
+        this.setCorsIfMissing(req, res, allowFromRow);
+        res.status(HttpStatusMap.invalidPayload).json(PublicErrors.invalidId);
+        return;
+      }
+    }
+
+    if (NonPayableStatuses.has(effectiveStatus)) {
+      this.setCorsIfMissing(req, res, allowFromRow);
+      // small debug hint for ops (status reason)
+      res.setHeader('X-Blocked-Reason', `status=${effectiveStatus}`);
+      res.status(409).json(PublicErrors.invalidState);
       return;
     }
 
     try {
       const payload = await this.txAssembler.buildUnsignedPayInvoice(row as any, payerPrincipal);
+      this.setCorsIfMissing(req, res, allowFromRow);
       res.json(payload);
     } catch (e: any) {
       if (e instanceof HttpError) {
+        this.setCorsIfMissing(req, res, allowFromRow);
         if (e.code === 'merchant-inactive') {
-          res.status(e.status).json(PublicErrors.invalidState);
+          res.status(e.status).json(PublicErrors.invalidState); return;
         } else if (e.code === 'expired') {
-          res.status(e.status).json(PublicErrors.expired);
+          res.status(e.status).json(PublicErrors.expired); return;
         } else if (e.code === 'missing-token') {
-          res.status(e.status).json(PublicErrors.missingSbtcToken);
+          res.status(e.status).json(PublicErrors.missingSbtcToken); return;
         } else if (e.code === 'invalid-id') {
-          res.status(e.status).json(PublicErrors.invalidId);
+          res.status(e.status).json(PublicErrors.invalidId); return;
         } else {
-          res.status(HttpStatusMap.conflict).json(PublicErrors.invalidState);
+          res.status(HttpStatusMap.conflict).json(PublicErrors.invalidState); return;
         }
-        return;
       }
+      this.setCorsIfMissing(req, res, allowFromRow);
       res.status(HttpStatusMap.conflict).json(PublicErrors.invalidState);
     }
   }
@@ -178,6 +242,9 @@ export class PublicApiController {
       return;
     }
     const profile = this.profileProjector.project(m);
+
+    // ensure CORS header on simple GET
+    this.setCorsIfMissing(req, res, (m as any).allowed_origins || (m as any).allowedOrigins);
     res.json(profile);
   }
 }

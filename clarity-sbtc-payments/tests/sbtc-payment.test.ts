@@ -36,7 +36,7 @@ describe("sbtc-payment basic flow (no globals)", () => {
     // accept ok or err u1 if rerun — skip assertion here
 
     // 2) set token: pass principal of the mock token contract
-    const tokenPrincipal = Cl.contractPrincipal(deployer, "mock-sbtc-token");
+    const tokenPrincipal = Cl.contractPrincipal(deployer, "sbtc-token");
     const r2 = simnet.callPublicFn(
       "sbtc-payment",
       "set-sbtc-token",
@@ -68,7 +68,7 @@ describe("sbtc-payment basic flow (no globals)", () => {
 
     // 5) mint payer some sBTC on mock token
     const r5 = simnet.callPublicFn(
-      "mock-sbtc-token",
+      "sbtc-token",
       "mint",
       [Cl.principal(payer), amount],
       deployer
@@ -99,7 +99,7 @@ describe("sbtc-payment basic flow (no globals)", () => {
   });
 
   it("refund guard: cannot exceed original (err u305)", () => {
-    const tokenPrincipal = Cl.contractPrincipal(deployer, "mock-sbtc-token");
+    const tokenPrincipal = Cl.contractPrincipal(deployer, "sbtc-token");
 
     // fresh invoice
     const id = Cl.bufferFromHex(
@@ -120,7 +120,7 @@ describe("sbtc-payment basic flow (no globals)", () => {
       merchant
     );
     simnet.callPublicFn(
-      "mock-sbtc-token",
+      "sbtc-token",
       "mint",
       [Cl.principal(payer), amt],
       deployer

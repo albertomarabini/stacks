@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_store ON invoices(store_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_status_created ON invoices(status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_invoices_id_hex ON invoices(id_hex);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -83,11 +84,10 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_webhooks_store ON webhook_logs(store_id);
 
-
-      CREATE TABLE IF NOT EXISTS poller_cursor (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        last_run_at INTEGER NOT NULL,
-        last_height INTEGER NOT NULL CHECK (last_height >= 0),
-        last_txid TEXT,
-        last_block_hash TEXT
-      );
+CREATE TABLE IF NOT EXISTS poller_cursor (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  last_run_at INTEGER NOT NULL,
+  last_height INTEGER NOT NULL CHECK (last_height >= 0),
+  last_txid TEXT,
+  last_block_hash TEXT
+);

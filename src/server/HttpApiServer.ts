@@ -21,8 +21,7 @@ import { CorsMiddlewareFactory } from '../delegates/CorsMiddlewareFactory';
 import type { IConfigService } from '../contracts/interfaces';
 
 type AdminGuard = { authenticateAdmin(req: any, res: any, next: any): void };
-
-
+const JSON_LIMIT = process.env.HTTP_JSON_LIMIT || '256kb';
 
 export class HttpApiServer {
   private readonly adminBinder = new AdminSurfaceBinder();
@@ -30,7 +29,6 @@ export class HttpApiServer {
   private readonly rootBinder = new RootRouteBinder();
   private readonly schedulerCoordinator = new SchedulerStartupCoordinator();
   private readonly corsFactory = new CorsMiddlewareFactory();
-  
 
   mountAdminAuth(app: Express, adminAuth: AdminGuard): void {
     this.adminBinder.bindAdminAuth(app, adminAuth);
@@ -70,7 +68,7 @@ export class HttpApiServer {
     crossTenantMask: CrossTenantMask;
     rateLimit: RateLimitPolicy;
     corsPolicy: CorsPolicy;
-    staticServer: AdminStaticServer;
+    staticServer: AdminStaticServer; // <-- ensure this exists in the type
     webhookVerifier: RequestHandler;
   }): void {
     deps.rateLimit.initLimiters();
@@ -83,6 +81,7 @@ export class HttpApiServer {
     const corsPublicProfile = this.corsFactory.create(['GET', 'OPTIONS'], deps.corsPolicy as any);
 
     // Public routes + preflights
+
     app.options('/i/:invoiceId', corsGetInvoice);
     app.get(
       '/i/:invoiceId',
@@ -96,7 +95,7 @@ export class HttpApiServer {
       '/create-tx',
       deps.rateLimit.publicCreateTxLimiter,
       corsCreateTx,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.publicCtrl.createTx(req, res),
     );
 
@@ -104,6 +103,13 @@ export class HttpApiServer {
       '/api/v1/stores/:storeId/public-profile',
       deps.rateLimit.publicProfileLimiter,
       corsPublicProfile,
+      // Guarantee ACAO on GET (fallback if CORS layer didn’t set it)
+      (req, res, next) => {
+        if (!res.getHeader('Access-Control-Allow-Origin')) {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+        }
+        next();
+      },
       (req, res) => deps.publicCtrl.getStorePublicProfile(req, res),
     );
 
@@ -113,12 +119,23 @@ export class HttpApiServer {
     const auth = (req: any, res: any, next: any) => deps.storeAuth.verifyApiKey(req, res, next);
     const mask = (req: any, res: any, next: any) => deps.crossTenantMask.enforce(req, res, next);
 
+    // NEW: one-shot “prepare invoice” that returns invoice + unsigned tx + deeplink
+    app.post(
+      '/api/v1/stores/:storeId/prepare-invoice',
+      auth,                  // ← merchant API key
+      mask,                  // ← cross-tenant guard
+      deps.rateLimit.createInvoiceLimiter,
+      express.json({ limit: JSON_LIMIT }),
+      (req, res) => deps.merchantCtrl.prepareInvoice(req, res),  // ← new action
+    );
+
+
     app.post(
       '/api/v1/stores/:storeId/invoices',
       auth,
       mask,
       deps.rateLimit.createInvoiceLimiter,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.createInvoice(req, res),
     );
 
@@ -150,12 +167,11 @@ export class HttpApiServer {
       (req, res) => deps.merchantCtrl.cancelInvoiceCreateTx(req, res),
     );
 
-
     app.post(
       '/api/v1/stores/:storeId/refunds',
       auth,
       mask,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.buildRefund(req, res),
     );
 
@@ -163,7 +179,7 @@ export class HttpApiServer {
       '/api/v1/stores/:storeId/refunds/create-tx',
       auth, mask,
       deps.rateLimit.createInvoiceLimiter,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.buildRefundTx(req, res),
     );
 
@@ -185,7 +201,7 @@ export class HttpApiServer {
       '/api/v1/stores/:storeId/profile',
       auth,
       mask,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.updateStoreProfile(req, res),
     );
 
@@ -200,7 +216,7 @@ export class HttpApiServer {
       '/api/v1/stores/:storeId/subscriptions',
       auth,
       mask,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.createSubscription(req, res),
     );
 
@@ -209,7 +225,7 @@ export class HttpApiServer {
       auth,
       mask,
       deps.rateLimit.subInvoiceLimiter,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.genSubscriptionInvoice(req, res),
     );
 
@@ -217,7 +233,7 @@ export class HttpApiServer {
       '/api/v1/stores/:storeId/subscriptions/:id/mode',
       auth,
       mask,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.setSubscriptionMode(req, res),
     );
 
@@ -225,7 +241,7 @@ export class HttpApiServer {
       '/api/v1/stores/:storeId/subscriptions/:id/cancel',
       auth,
       mask,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.cancelSubscription(req, res),
     );
 
@@ -233,40 +249,39 @@ export class HttpApiServer {
       '/api/v1/stores/:storeId/subscriptions/:id/create-tx',
       auth,
       mask,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.merchantCtrl.buildDirectSubscriptionPaymentTx(req, res),
     );
 
-
     // Admin API
-    const adminGuard = (req: any, res: any, next: any) => deps.adminAuth.authenticateAdmin(req, res, next);
+    const adminGuard = (req: any, res: any, next: any) =>
+      deps.adminAuth.authenticateAdmin(req, res, next);
 
-    // parse JSON first, then guard, and forward async errors
-    app.post('/api/admin/stores',
-      express.json(),
-      adminGuard,
-      (req, res, next) => deps.adminCtrl.createStore(req, res).catch(next)
+    app.post('/api/admin/bootstrap', adminGuard, (req, res) =>
+      deps.adminCtrl.bootstrapAdmin(req, res)
     );
-
-
-    app.get('/api/admin/stores', adminGuard, (req, res) =>
-      deps.adminCtrl.listStores(req, res)
-    );
-
     app.get('/api/admin/invoices', adminGuard, (req, res) => deps.adminCtrl.listInvoices(req, res));
 
 
-    app.post(
+    // LIST stores (missing → adds support for test 55)
+    app.get(
       '/api/admin/stores',
       adminGuard,
-      express.json(),
+      (req, res) => deps.adminCtrl.listStores(req, res),
+    );
+
+    // CREATE store (keep a single registration)
+    app.post(
+      '/api/admin/stores',
+      express.json({ limit: JSON_LIMIT }),
+      adminGuard,
       (req, res) => deps.adminCtrl.createStore(req, res),
     );
 
     app.patch(
       '/api/admin/stores/:storeId/activate',
       adminGuard,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.adminCtrl.activateStore(req, res),
     );
 
@@ -285,7 +300,7 @@ export class HttpApiServer {
     app.post(
       '/api/admin/set-sbtc-token',
       adminGuard,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.adminCtrl.setSbtcToken(req, res),
     );
 
@@ -306,7 +321,7 @@ export class HttpApiServer {
     app.post(
       '/api/admin/webhooks/retry',
       adminGuard,
-      express.json(),
+      express.json({ limit: JSON_LIMIT }),
       (req, res) => deps.adminCtrl.retryWebhook(req, res),
     );
 
@@ -316,7 +331,7 @@ export class HttpApiServer {
       (req, res) => deps.adminCtrl.cancelInvoice(req, res),
     );
 
-    // Admin SPA (static + index)
+    // Admin SPA (static + index) — safe if directory missing (middleware no-ops)
     this.mountAdminStatic(app, deps.adminAuth, deps.staticServer.serveStatic());
     this.mountAdminIndex(app, deps.adminAuth, (req, res) => deps.staticServer.serveIndex(req, res));
 

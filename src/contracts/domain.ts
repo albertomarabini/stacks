@@ -42,6 +42,7 @@ export interface OnChainSubscription {
   intervalBlocks: bigint;
   active: boolean;
   nextDue: bigint;
+  lastPaid?: bigint;
 }
 
 export interface OnChainAdminState {

@@ -8,17 +8,20 @@
     "scripts": {
         "dev": "ts-node -P tsconfig.server.json src/bootstrap/ApplicationBootstrapper.ts",
         "build": "tsc -p tsconfig.server.json",
-        "start": "node dist/bootstrap/ApplicationBootstrapper.js"
+        "integration_test": "npx ts-node scripts/quick-server_integration.ts"
     },
     "dependencies": {
         "@stacks/network": "^7.2.0",
         "@stacks/transactions": "^7.2.0",
         "axios": "^1.11.0",
+        "bech32": "^2.0.0",
         "better-sqlite3": "^9.6.0",
         "cors": "^2.8.5",
         "dotenv": "^16.6.1",
         "express": "^4.21.2",
         "express-rate-limit": "^8.0.1",
+        "stacks-pay": "^0.0.4",
+        "supertest": "^7.1.4",
         "zod": "^3.25.76"
     },
     "devDependencies": {

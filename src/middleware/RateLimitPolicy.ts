@@ -1,115 +1,108 @@
+// RateLimitPolicy.ts
 import rateLimit from 'express-rate-limit';
+import type { Request, Response, RequestHandler } from 'express';
 
 export class RateLimitPolicy {
-  public publicInvoiceViewLimiter!: import('express').RequestHandler;
-  public publicProfileLimiter!: import('express').RequestHandler;
-  public publicCreateTxLimiter!: import('express').RequestHandler;
-  public createInvoiceLimiter!: import('express').RequestHandler;
-  public subInvoiceLimiter!: import('express').RequestHandler;
+  public publicInvoiceViewLimiter!: RequestHandler;
+  public publicProfileLimiter!: RequestHandler;
+  public publicCreateTxLimiter!: RequestHandler;
+  public createInvoiceLimiter!: RequestHandler;
+  public subInvoiceLimiter!: RequestHandler;
 
   initLimiters(): void {
-    const publicWindowMs = 60_000;
-    const publicMax = 30;
-
-    const merchantWindowMs = 60_000;
-    const merchantMax = 30;
-
-    const subWindowMs = 60_000;
-    const subMax = 30;
+    const publicWindowMs   = Number(process.env.RL_PUBLIC_WINDOW_MS   ?? 60_000);
+    const publicMax        = Number(process.env.RL_PUBLIC_MAX         ?? 30);
+    const merchantWindowMs = Number(process.env.RL_MERCHANT_WINDOW_MS ?? 60_000);
+    const merchantMax      = Number(process.env.RL_MERCHANT_MAX       ?? 30);
+    const subWindowMs      = Number(process.env.RL_SUB_WINDOW_MS      ?? 60_000);
+    const subMax           = Number(process.env.RL_SUB_MAX            ?? 30);
 
     this.publicInvoiceViewLimiter = this.buildPublicLimiter(
-      this.publicInvoiceViewLimiterHandler.bind(this),
-      publicWindowMs,
-      publicMax
-    );
-
+      this.publicInvoiceViewLimiterHandler.bind(this), publicWindowMs, publicMax);
     this.publicProfileLimiter = this.buildPublicLimiter(
-      this.publicProfileLimiterHandler.bind(this),
-      publicWindowMs,
-      publicMax
-    );
-
+      this.publicProfileLimiterHandler.bind(this), publicWindowMs, publicMax);
     this.publicCreateTxLimiter = this.buildPublicLimiter(
-      this.publicCreateTxLimiterHandler.bind(this),
-      publicWindowMs,
-      publicMax
-    );
+      this.publicCreateTxLimiterHandler.bind(this), publicWindowMs, publicMax);
 
     this.createInvoiceLimiter = this.buildMerchantLimiter(
-      this.createInvoiceLimiterHandler.bind(this),
-      merchantWindowMs,
-      merchantMax
-    );
+      this.createInvoiceLimiterHandler.bind(this), merchantWindowMs, merchantMax);
 
     this.subInvoiceLimiter = this.buildSubInvoiceLimiter(subWindowMs, subMax);
   }
 
-  publicInvoiceViewLimiterHandler(req: import('express').Request, res: import('express').Response): void {
+  // ----- Express handlers you want called on limit -----
+  publicInvoiceViewLimiterHandler(req: Request, res: Response): void {
     res.status(429).json({ reason: 'rateLimited' });
   }
-
-  publicProfileLimiterHandler(req: import('express').Request, res: import('express').Response): void {
+  publicProfileLimiterHandler(req: Request, res: Response): void {
     res.status(429).json({ reason: 'rateLimited' });
   }
-
-  publicCreateTxLimiterHandler(req: import('express').Request, res: import('express').Response): void {
+  publicCreateTxLimiterHandler(req: Request, res: Response): void {
     res.status(429).json({ reason: 'rateLimited' });
   }
-
-  createTxLimiterHandler(req: import('express').Request, res: import('express').Response): void {
-    res.status(429).json({ reason: 'rateLimited' });
+  createInvoiceLimiterHandler(req: Request, res: Response): void {
+    res.status(429).json({ error: 'rate_limited' });
   }
-
-  createInvoiceLimiterHandler(req: import('express').Request, res: import('express').Response): void {
+  subInvoiceLimiterHandler(req: Request, res: Response): void {
     res.status(429).json({ error: 'rate_limited' });
   }
 
-  buildSubInvoiceLimiter(windowMs?: number, max?: number): import('express').RequestHandler {
-    const handler = this.subInvoiceLimiterHandler.bind(this);
+  // ----- Adapters (v7 expects Fetch-like request/response) -----
+  private toExpressOnLimit(
+    fn: (req: Request, res: Response) => void,
+  ) {
+    return (request: unknown, response: unknown) => {
+      fn(request as Request, response as Response);
+    };
+  }
+
+  // ----- Builders -----
+  private buildPublicLimiter(
+    onLimit: (req: Request, res: Response) => void,
+    windowMs: number,
+    max: number,
+  ): RequestHandler {
+    return rateLimit({
+      windowMs,
+      max,
+      standardHeaders: true,
+      legacyHeaders: false,
+      handler: this.toExpressOnLimit(onLimit),
+      // public routes can use default key (req.ip); see trust proxy note below
+    }) as unknown as RequestHandler;
+  }
+
+  private buildMerchantLimiter(
+    onLimit: (req: Request, res: Response) => void,
+    windowMs: number,
+    max: number,
+  ): RequestHandler {
+    return rateLimit({
+      windowMs,
+      max,
+      standardHeaders: true,
+      legacyHeaders: false,
+      handler: this.toExpressOnLimit(onLimit),
+      keyGenerator: (req: any) => {
+        const storeId = String(req.store?.id ?? req.params?.storeId ?? 'unknown');
+        const apiKey = String(req.headers['x-api-key'] ?? (req.headers as any)['X-API-Key'] ?? 'no-key');
+        return `${storeId}|${apiKey}`;
+      },
+    }) as unknown as RequestHandler;
+  }
+
+  buildSubInvoiceLimiter(windowMs?: number, max?: number): RequestHandler {
     return rateLimit({
       windowMs: windowMs ?? 60_000,
       max: max ?? 30,
       standardHeaders: true,
       legacyHeaders: false,
-      handler,
-      keyGenerator: (req) => {
-        const anyReq = req as any;
-        const storeId = String(anyReq.store.id);
-        const apiKeyHeader = String(req.headers['x-api-key'] ?? (req.headers as any)['X-API-Key']);
-        return `${storeId}|${apiKeyHeader}`;
+      handler: this.toExpressOnLimit(this.subInvoiceLimiterHandler.bind(this)),
+      keyGenerator: (req: any) => {
+        const storeId = String(req.store?.id ?? req.params?.storeId ?? 'unknown');
+        const apiKey = String(req.headers['x-api-key'] ?? (req.headers as any)['X-API-Key'] ?? 'no-key');
+        return `${storeId}|${apiKey}`;
       },
-    });
-  }
-
-  subInvoiceLimiterHandler(req: import('express').Request, res: import('express').Response): void {
-    res.status(429).json({ error: 'rate_limited' });
-  }
-
-  private buildPublicLimiter(
-    handler: (req: import('express').Request, res: import('express').Response) => void,
-    windowMs: number,
-    max: number
-  ): import('express').RequestHandler {
-    return rateLimit({
-      windowMs,
-      max,
-      standardHeaders: true,
-      legacyHeaders: false,
-      handler,
-    });
-  }
-
-  private buildMerchantLimiter(
-    handler: (req: import('express').Request, res: import('express').Response) => void,
-    windowMs: number,
-    max: number
-  ): import('express').RequestHandler {
-    return rateLimit({
-      windowMs,
-      max,
-      standardHeaders: true,
-      legacyHeaders: false,
-      handler,
-    });
+    }) as unknown as RequestHandler;
   }
 }

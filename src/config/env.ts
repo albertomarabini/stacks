@@ -19,6 +19,6 @@ export function loadEnvSnapshot(): IConfigSnapshot {
     reorgWindowBlocks: Number(process.env.REORG_WINDOW_BLOCKS ?? 6),
     pollIntervalSecs: Number(process.env.POLL_INTERVAL_SECS ?? 30),
     priceApiUrl: process.env.PRICE_API_URL ? String(process.env.PRICE_API_URL) : undefined,
-    autoBroadcast: String(process.env.AUTO_BROADCAST ?? 'false') === 'true',
+    autoBroadcast: String(process.env.AUTO_BOOTSTRAP_ADMIN ?? '1') === 'true',
   });
 }

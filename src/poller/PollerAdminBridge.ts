@@ -16,4 +16,5 @@ export class PollerAdminBridge {
   restart(): { running: boolean } {
     return this.poller.restartPoller();
   }
+  isActive(): boolean { return this.poller.isActive(); }
 }

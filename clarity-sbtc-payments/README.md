@@ -7,7 +7,7 @@
 
 npm run devnet_reset (does a clean reset of devnet)
 
-../bin/clarinet devnet start --no-dashboard
+../bin/clarinet devnet start
 ../bin/clarinet deployments apply --devnet --no-dashboard
 
 * Logs confirmed containers up:
@@ -19,7 +19,7 @@ npm run devnet_reset (does a clean reset of devnet)
 * CLI printed Broadcasted txids:
 
   * sbtc-payment → 6153d1d0b541d9cb36ab4e8f3b5edc69b5b273ac36f1708a7f91da67069ff9d9
-  * mock-sbtc-token → 1512778b9c417efb142a9d3946abbbcdbcc25c00632ee1f924d895c98aef500d
+  * sbtc-token → 1512778b9c417efb142a9d3946abbbcdbcc25c00632ee1f924d895c98aef500d
     ✅ Deployment transactions were submitted to Core.
 
 ---

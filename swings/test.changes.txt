@@ -1,0 +1,258 @@
+love this test dump — super helpful. I ran your suite against the plan we just locked and here are the **misalignments** (with precise fixes). I’m only using **currently supported tech** (Connect + RPC), and I’ll point to docs for anything protocol-y (PCs, RPC). Citations inline.
+
+---
+
+## 🚨 High-impact mismatches (must fix to ship)
+
+### 1) Test hard-requires a StacksPay deeplink (`web+stx:`)
+
+**Plan:** we removed StacksPay (proposed) and standardized on **`@stacks/connect`** + a **magicLink** to the hosted checkout.&#x20;
+
+**Where it breaks:**
+`merchant: prepare-invoice returns dto+unsigned+deeplink` enforces:
+
+```js
+const deeplink = String(j?.stacksPayURI || "");
+const okDeeplink = /^web\+stx:stxpay1/i.test(deeplink);
+...
+return okDto && okUnsigned && okPcs && okDeeplink && okMagic && okMagicFetch;
+```
+
+**Fix (test):** make StacksPay **optional**. Keep passing if `stacksPayURI` is missing.
+
+```diff
+-  const deeplink = String(j?.stacksPayURI || "");
+-  const okDeeplink = /^web\+stx:stxpay1/i.test(deeplink);
++  const hasStacksPay = typeof j?.stacksPayURI === "string" && j.stacksPayURI.length > 0;
++  const okDeeplink = !hasStacksPay || /^web\+stx:/i.test(j.stacksPayURI);
+...
+-  return okDto && okUnsigned && okPcs && okDeeplink && okMagic && okMagicFetch;
++  return okDto && okUnsigned && okPcs && okMagic && okMagicFetch && okDeeplink;
+```
+
+*(Optional: delete the `stacks-pay` validator block, or guard it with `if (hasStacksPay) { ... }`.)*
+
+Why: Connect opens the wallet reliably today; no custom URI needed.&#x20;
+
+---
+
+### 2) Unsigned call **shape** mismatch
+
+**Plan output:** we returned `{ contractId, function, args }`.
+**Test expects:** separate `contractAddress`, `contractName`, **`functionName`**, and **typed** `functionArgs` (`{ type, value }`). It also reads these fields elsewhere (e.g., caching `contractAddress`/`contractName` for later).
+
+**Fix (API):** return the **test shape**:
+
+```json
+{
+  "contractAddress": "SPxxxx",
+  "contractName": "webpay",
+  "functionName": "pay-invoice",
+  "functionArgs": [
+    { "type": "buffer",  "value": "0x…invoiceId" },
+    { "type": "uint",    "value": "25000" },
+    { "type": "contract","value": "SP…sbtc-token" }   // see #3
+  ],
+  "postConditions": [
+    {
+      "type": "ft-postcondition",
+      "address": "<TX_SENDER or payerPrincipal>",
+      "asset": "SP…sbtc-token::sbtc",
+      "condition": "eq",
+      "amount": "25000"
+    }
+  ],
+  "postConditionMode": "deny",
+  "anchorMode": "any",
+  "network": "mainnet"
+}
+```
+
+(PC & Deny mode are standard.  )
+
+---
+
+### 3) Token contract must be a **function arg (last)**
+
+Multiple tests tamper with the **last** `functionArgs` element to simulate **wrong token** (`u207/u307`). Our minimal contract used a constant `SBTC`, so tampering would have no effect.
+
+**Fix (contract & builder):**
+
+* Make `pay-invoice` (and `refund-invoice`) **accept token contract** as the **last arg**.
+* Validate it equals the configured sbtc contract (set on-chain via `set-sbtc-token`) → abort with `u207`/`u307` if mismatched.
+* Builder **must** place the sbtc contract as the **last function arg** so tests can tamper predictably.
+
+*(PCs still prove “payer willSendEq N for `<sbtc>::sbtc`”; recipient is enforced by your function — that’s how PCs work. )*
+
+---
+
+### 4) Missing on-chain functions expected by tests
+
+Your suite broadcasts and/or expects events for:
+
+* `register-merchant`, `set-merchant-active` (admin prereqs)
+* `create-invoice` (materialize DTO on-chain)
+* `pay-invoice` (we have)
+* `mark-expired` (anyone can call)
+* **refunds:** `refund-invoice` (+ “invoice-refunded” print)
+* **cancel:** prints `invoice-canceled` when on-chain cancel path is used
+
+**Fix (contract):** add these entrypoints + stable **error codes**:
+
+* `u201` double-pay
+* `u205` inactive store (used in “pay while inactive”)
+* `u207` wrong token (pay)
+* `u301` refund-before-paid
+* `u305` over-refund
+* `u307` wrong token (refund)
+
+Tests directly assert these codes in aborts. Keep them 1:1.
+
+---
+
+### 5) On-chain **active** gating
+
+Tests expect:
+
+* Builder blocks when store inactive (HTTP 4xx is fine).
+* **On-chain** pay while inactive aborts **`u205`**.
+
+**Fix (contract):** maintain `map store-active` and assert **active** in `create-invoice`, `pay-invoice`, and `refund-invoice`. (Server already PATCHes `/api/admin/stores/:id/activate`.)
+
+---
+
+### 6) Admin route to set sBTC config (unsigned call)
+
+Tests call:
+
+```
+POST /api/admin/set-sbtc-token { contractAddress, contractName }
+→ { call } // unsigned
+```
+
+and then broadcast it.
+
+**Fix (API):** implement this route; it should return a **contract call** to your config contract. This is used to unblock the **builder** (`/create-tx`) which otherwise returns `409 invalid_state` (“sBTC not configured”). The node-side broadcast/read flows are per the RPC docs (`/v2/contracts/call-read`, `/v2/transactions`). &#x20;
+
+---
+
+### 7) Cancel flow (builder + on-chain print)
+
+Tests use both:
+
+* **Builder path:** `/api/v1/stores/:id/invoices/:invoiceId/cancel/create-tx` (merchant-signed)
+* **Fallback DTO cancel:** `/api/v1/stores/:id/invoices/:invoiceId/cancel` (mirror-only)
+
+They also check chain **event log** contains `"invoice-canceled"` after broadcast.
+
+**Fix:** support both, and in the contract emit a `print` log with `"invoice-canceled"`.
+
+---
+
+### 8) Refund flows (builder, events, caps)
+
+You need:
+
+* `POST /api/v1/stores/:id/refunds/create-tx` → unsigned `refund-invoice`
+* On-chain:
+
+  * enforce **paid** (`u301` if not),
+  * enforce **<= remaining** (`u305`),
+  * enforce **correct token** (`u307`),
+  * `print "invoice-refunded"` event,
+  * update mirror (`refundAmount`).
+
+---
+
+## ✅ Already aligned / minor
+
+* **Public builder** `/create-tx` (unsigned `pay-invoice`) + CORS preflight → present in the plan (existing invoice path).
+* **Poller/admin** (`/api/admin/poller`, restart toggles) + HMAC webhooks → in plan; just keep headers consistent.
+* **Rate limiting** for `/create-tx` and `/invoices` → app policy; keep 429s.
+* **RPC usage**: fee estimate `/v2/fees/transaction`, nonce `/v2/accounts`, broadcast `/v2/transactions`, read-only `/v2/contracts/call-read`. &#x20;
+
+---
+
+## 🔧 Concrete changes (server + tests)
+
+### A) `prepare-invoice` response shape (server)
+
+Return exactly what the tests expect (drop `stacksPayURI`, keep `magicLink`):
+
+```diff
+ {
+   "invoice": { ... },
+-  "stacksPayURI": "web+stx:…",            // remove (non-standard)
+   "magicLink": "https://pay.example.com/i/inv_…",
+-  "unsignedCall": { "contractId": "SP…webpay", "function": "pay-invoice", "args": [...] }
++  "unsignedCall": {
++    "contractAddress": "SP…",
++    "contractName": "webpay",
++    "functionName": "pay-invoice",
++    "functionArgs": [
++      { "type": "buffer",   "value": "0x…idHex" },
++      { "type": "uint",     "value": "25000"    },
++      { "type": "contract", "value": "SP…sbtc-token" }    // last arg
++    ],
++    "postConditions": [ /* FT PC: payer willSendEq amount for sbtc */ ],
++    "postConditionMode": "deny",
++    "anchorMode": "any",
++    "network": "mainnet"
++  }
+ }
+```
+
+(PC semantics + Deny mode per docs.  )
+
+### B) `public: create-tx` (server)
+
+Ensure it **blocks**:
+
+* canceled/expired/inactive → **409 invalid\_state** (tests accept either 4xx or 409+`invalid_state`).
+* wrong-token is caught only **on-chain**; builder must still build the canonical call.
+
+### C) Test: make StacksPay optional (see patch in #1)
+
+### D) Contract deltas (minimal & exact)
+
+* **Args (order matters)**
+  `pay-invoice(id: (buff 32), amount: uint, token: <contract-principal>)`
+  `refund-invoice(id: (buff 32), amount: uint, token: <contract-principal>)`
+* **Checks**
+
+  * `asserts! (is-eq token configured-sbtc) (err u207)` in `pay-invoice`
+  * `asserts! store-active (err u205)` wherever value moves
+  * `asserts! (not paid) (err u201)` on second pay
+  * `refund`: `paid?` → else `u301`; `remaining >= amount` → else `u305`; token match → else `u307`
+* **Anyone** can `mark-expired(id)` (no-op if already expired; return `(ok true)`).
+* **Events**
+  `print { event: "invoice-refunded", ... }` and `print { event: "invoice-canceled", ... }` so the test finds them.
+
+*(Your FT PC still proves the payer will send **exact** sBTC, and Deny mode blocks extras. )*
+
+---
+
+## 🧭 Why these changes
+
+* **Connect over URIs**: production-safe wallet opening across Leather/Xverse/etc., documented and maintained.&#x20;
+* **PCs & Deny**: best practice, and they verify *sent* amounts only (recipient enforced in contract). &#x20;
+* **RPC endpoints** used match node docs (self-hostable). &#x20;
+
+---
+
+## 📋 Quick checklist to get green across this suite
+
+1. Change **test** to make `stacksPayURI` optional (patch above).
+2. Update **builder** to return the expected unsigned call **shape** (+ token as last arg).
+3. Implement `/api/admin/set-sbtc-token` (returns unsigned call), and keep builder blocking with 409 until configured.&#x20;
+4. Add/finish **contract** fns & error codes as listed (pay, refund, mark-expired, cancel prints, active gating, wrong-token checks).
+5. Keep **PC** generation: single FT PC **on payer** with **Deny**. &#x20;
+6. Ensure **CORS** on `GET /i/:id` and preflights for `/create-tx` & builders.
+7. Keep **webhooks** HMAC and **poller** endpoints; you already have tests for retries.
+
+If you want, I can deliver a targeted patch:
+
+* `prepare-invoice` serializer (TS),
+* `create-tx` handler guard rails, and
+* Clarity signatures/guards for `pay-invoice`/`refund-invoice`/`mark-expired`,
+  all exactly matching the suite’s expectations.

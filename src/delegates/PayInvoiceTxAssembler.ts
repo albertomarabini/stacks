@@ -52,39 +52,25 @@ export class PayInvoiceTxAssembler {
     row: InvoiceRowForTx,
     payerPrincipal?: string,
   ): Promise<any> {
-    const isActive =
-      typeof row.store.active === 'boolean'
-        ? row.store.active
-        : row.store.active === 1;
+    const isActive = (typeof row.store.active === 'boolean') ? row.store.active : row.store.active === 1;
     if (!isActive) throw new HttpError(422, 'merchant-inactive');
 
     this.idGuard.validateHexIdOrThrow(row.id_hex);
 
-    // ── fail fast if the platform isn't configured with sBTC ─────────────
     const tokenId = this.cfg.getSbtcContractId();
-    if (!tokenId) {
-      // controller maps this to HTTP 422 → { error: "missingSbtcToken" }
-      throw new HttpError(422, 'missing-token');
-    }
-    // Surface misconfig early (throws if malformed)
-    this.aif.getSbtcAssetInfo();
+    if (!tokenId) throw new HttpError(422, 'missing-token');
+    this.aif.getSbtcAssetInfo(); // surface misconfig
 
-    // ── Status/TTL checks AFTER config sanity ─────────────────────────────────
-    const onchain = await this.chain.readInvoiceStatus(row.id_hex);
+    // TTL + mirror status checks only (no on-chain call here)
     const ttlExpired = Date.now() > row.quote_expires_at;
-    if (ttlExpired || onchain === 'expired') throw new HttpError(409, 'expired');
-    if (
-      onchain === 'paid' ||
-      onchain === 'canceled' ||
-      this.nonPayableStatuses.has(row.status)
-    ) {
+    if (ttlExpired) throw new HttpError(409, 'expired');
+    if (this.nonPayableStatuses.has(row.status)) {
       throw new HttpError(409, 'invalid-state');
     }
 
-    const effectivePayer =
-      typeof payerPrincipal === 'string' && payerPrincipal.length > 0
-        ? payerPrincipal
-        : row.merchant_principal;
+    const effectivePayer = (typeof payerPrincipal === 'string' && payerPrincipal.length > 0)
+      ? payerPrincipal
+      : row.merchant_principal;
 
     return this.builder.buildPayInvoice({
       idHex: row.id_hex,

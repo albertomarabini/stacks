@@ -30,9 +30,10 @@ export class PostConditionFactory implements IPostConditionFactory {
 
     // Payer must send >= amount of the FT (sBTC)
     const payerSendsGte = Pc.principal(payer).willSendGte(amt).ft(contractId, asset.assetName);
+    // extra guard: merchant does not send any sBTC in this tx
+    const merchantSendsLte0 = Pc.principal(merchant).willSendLte(0n).ft(contractId, asset.assetName);
 
-    // Cannot assert merchant-gets-≥ with post-conditions; enforced in Clarity.
-    return [payerSendsGte];
+    return [payerSendsGte, merchantSendsLte0];
   }
 
   /**

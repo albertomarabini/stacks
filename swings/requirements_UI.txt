@@ -1,0 +1,1036 @@
+---
+
+# WEBPAY — sBTC Payments Hub (POC)
+
+**Goal:** a Single Web Platform that provides unambiguous flows for sBTC payments that a merchant can use to:
+(1) redirect checkout from their site,
+(2) run a POS screen,
+(3) emit invoices, and
+(4) create subscriptions
+
+---
+## Introduction and cornerstones
+WEBPAY is A hosted checkout for sBTC.
+Merchants redirect, show a POS QR, email an invoice, or bill a subscription; customers click a magic-link that opens their wallet to send exactly the right amount with strong safety checks.
+
+### Tech stack
+
+* **Runtime**: Node 20+, **TypeScript** everywhere.
+* **Web framework**: **Express** (+ server-rendered pages) for max control
+* **Styling**: Tailwind (keeps UI fast to ship).
+* **State/query**: fetch-based; no client state libs needed.
+* **Email (Postmark)**: body contains the **magic-link**.
+```
+  body: JSON.stringify({
+    From: `billing@${SENDER_DOMAIN}`,
+    To: recipientEmail,
+    Subject: `${brand.displayName} — Invoice for ${invoice.amountSats} sats`,
+    HtmlBody: renderInvoiceEmail({ brand, invoice, magicLink }),
+    TextBody: renderInvoiceEmailText({ brand, invoice, magicLink }),
+    MessageStream: 'outbound'
+  })
+```
+* **Secrets**: `.env` .
+
+### UI surfaces (just enough to ship)
+
+* **Magic-link / Checkout page**: minimal status, amount, timer, **Open wallet** button fallback, QR (same link), polling strip.
+* **POS**: amount input → Create → big QR, timer, status dots → Paid ✓ → New sale.
+* **Merchant console**
+  * Invoices: Create modal → success sheet (Copy Link, Email, Show QR), ledger table with state-driven actions (Cancel, Refund, View Tx).
+  * Subscriptions: Create, list, “Generate invoice now”, Cancel; details drawer shows history/next due.
+  * Branding settings, Webhook deliveries (read-only log).
+
+* **Admin console**
+  * Stores CRUD, Activate/Deactivate, Rotate keys (one-time reveal), Set sBTC token, Poller status/logs, Retry webhook.
+
+
+### System components & responsibility split
+
+* **Merchant site/app (your ecommerce, redirect-only): never talks to Bridge; no signing keys.**
+  Triggers payment by **redirecting the shopper to WEBPAY** with minimal order parameters. Holds no signing keys; never talks to the Bridge directly in redirect flows.
+
+* **WEBPAY (hosted web)**
+  serves all public pages (checkout, magic-link, POS, subscription); calls the **Bridge** server-to-server with the store **API key**; verifies `u` on magic-link pages.
+
+* **Node.js Bridge (to Clarity)**
+  owns **all** invoice/subscription persistence, unsigned-call building, **`u` minting (HMAC)**, pollers, and webhooks; exposes the **Bridge API** (`/api/admin/...`, `/api/v1/...`, `/i/:invoiceId`, `/create-tx`).
+** THE BRIDGE HAS BEEN ALREADY IMPLEMENTED: DOES NOT NEED ANY FURTHER WORK. IS REFERENCED HERE JUST FOR INTERFACEMENT**
+
+* **Wallet (Stacks Connect)**
+  Signs/broadcasts `stx_callContract`. Must be called with `postConditionMode: 'deny'` and sBTC **FT post-condition** on the payer. &#x20;
+** THE WALLET IS ANY SBTC COMPATIBLE WALLET SUCH AS LEATHER**
+
+* **Stacks infra (RPC/Blockchain API)** for fee/nonce and reads:
+  `GET /v2/accounts/{principal}`, `POST /v2/fees/transaction`, `POST /v2/transactions` (broadcast). &#x20;
+
+> sBTC is a **SIP-010 fungible token**; enforce “willSendEq amountSats” via FT post-condition + **Deny** mode. Post-conditions assert what the **payer sends**, not the recipient. &#x20;
+
+
+### 1) The *magic‑link*
+
+A **magic-link** is a WEBPAY-hosted HTTPS URL that opens the wallet for a specific invoice:
+
+```
+https://example.webpay.com/w/<storeId>/<invoiceId>?u=...(&return)
+```
+
+* The **`u` blob is produced and HMAC-signed by the Node.js Bridge**, and **verified by WEBPAY** before rendering the page.
+* The **link string itself is constructed by the Bridge** (it knows WEBPAY’s base URL), then returned to WEBPAY and surfaced to the merchant/UI.
+
+#### What it serves
+
+A super‑small HTML page that immediately runs Stacks **Connect** and calls the wallet with a **contract call** for `pay-invoice`. If the browser blocks auto‑open, it shows a single **“Open wallet”** button.
+
+#### Where it’s used
+
+* **Web checkout redirect:** merchant → WEBPAY → magic‑link page opens wallet.
+* **POS QR:** the QR shown on the terminal is **exactly** the magic‑link.
+* **Emails/subscriptions:** the email contains the **magic‑link**. Users click it; the wallet opens and they pay.
+
+> No separate “checkout‑link”. The UI that previews amount/branding/expiry can be the same page if desired, but the link we surface externally is always the **magic‑link**.
+
+---
+
+### 2) Magic‑link page example
+The **WEBPAY checkout page** (opened by the magic‑link):
+
+1. Shows amount, USD snapshot, TTL countdown, brand from `public-profile`.
+2. Calls **Connect** with the embedded `unsignedCall` from `u`.
+3. Displays a **QR of the same magic‑link** (for device handoff), not a raw wallet URI.
+4. Polls `GET /i/:invoiceId` for status.
+5. Shows a timer for expiration
+
+```html
+<!doctype html>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>WEBPAY — Open your wallet</title>
+<div id="ui" style="font:14px system-ui;padding:24px">Opening your wallet…</div>
+<script type="module">
+  import { request } from 'https://cdn.skypack.dev/@stacks/connect';
+
+  // base64url → JSON
+  const q = new URL(location).searchParams;
+  const b64u = q.get('u') || '';
+  const b64 = b64u.replace(/-/g, '+').replace(/_/g, '/');
+  const data = JSON.parse(atob(b64)); // throws if tampered/empty
+
+  const uc = data.unsignedCall;
+
+  let opened = false;
+  async function openWallet() {
+    if (opened) return; opened = true;
+    const res = await request('stx_callContract', {
+      contract: uc.contractId,           // single string "SP...name"
+      functionName: uc.function,         // map 'function' → functionName
+      functionArgs: uc.args,             // already serialized
+      postConditions: uc.postConditions, // must include FT PC on payer
+      postConditionMode: 'deny',         // required
+      network: uc.network                // 'mainnet' | 'testnet'
+    });
+    const txid = res.txid || res.txId;
+    document.getElementById('ui').innerText = `Broadcasted: ${txid}`;
+    const back = q.get('return');
+    if (back) location.href = `${back}?txid=${encodeURIComponent(txid)}`;
+  }
+
+  openWallet().catch(() => {
+    const b = document.createElement('button');
+    b.textContent = 'Open wallet';
+    Object.assign(b.style, { padding:'12px 16px', marginTop:'12px', borderRadius:'10px' });
+    b.onclick = openWallet;
+    document.getElementById('ui').appendChild(b);
+  });
+</script>
+
+```
+
+**Before generating the checkout page**, WEBPAY must parse and validate `u`. If `u` is missing/invalid/expired → **render error UI and DO NOT open the wallet**.
+
+1. **Require `u`**
+   If missing → **400** “Invalid link”.
+
+2. **Decode + parse**
+   `u` is **base64url(JSON)**. Decode and `JSON.parse`. If parse fails → **400**.
+
+3. **HMAC verification (anti-tamper)**
+   The JSON object contains `sig` (HMAC-SHA256). Compute:
+   • `payload := JSON.stringify({ v, storeId, invoiceId, unsignedCall, exp })` (exact key order)
+   • `mac := HMAC_SHA256(store.hmacSecret, payload)` (base64url)
+   • Compare with `sig` using constant-time equality. If mismatch → **403**.
+   **Provisioning note:** WEBPAY holds the **per-store `hmacSecret`** to verify `u`. The **Bridge** also holds this secret to **mint** `u`. On **rotate-keys**, both WEBPAY and the Bridge are updated so that mint/verify remain in sync.
+
+4. **Path invariants**
+   `data.storeId === req.params.storeId` and `data.invoiceId === req.params.invoiceId`; else **400**.
+
+5. **Expiry**
+   `nowSec := Math.floor(Date.now()/1000)`.
+   If `data.exp < nowSec` → **410 Gone** “Expired”.
+   If `data.exp - nowSec 300` → **400** “TTL too long”.
+
+6. **Unsigned call shape (safety gate)**
+
+   * `data.unsignedCall.function === "pay-invoice"`
+   * `data.unsignedCall.postConditionMode === "deny"` (required)
+   * `data.unsignedCall.postConditions` **includes at least one** FT post-condition on the **payer** with **`willSendEq amountSats`** for the **sBTC** SIP-010 asset id. *(Post-conditions assert what the payer sends; they don’t guarantee the recipient.)*
+
+7. **Cross-check against public DTO (fresh state)**
+   Call `GET /i/:invoiceId` and verify:
+   • `status ∈ { PAY_READY, pending }` (reject `paid|expired|canceled` → **409**)
+   • `amountSats` equals the FT PC amount
+   • `quoteExpiresAt ≥ now` (defense-in-depth with step 5)
+   On any mismatch → **409 invalid\_state**.
+
+8. **Network**
+   `unsignedCall.network` must match deployment (`mainnet`/`testnet`) served by this WEBPAY instance; else **400**.&#x20;
+
+**Only if all checks pass**, render the page and immediately open the wallet via **Connect**:
+
+```ts
+await request('stx_callContract', {
+  contract: data.unsignedCall.contractId,
+  functionName: data.unsignedCall.function,
+  functionArgs: data.unsignedCall.args,
+  postConditions: data.unsignedCall.postConditions,
+  postConditionMode: 'deny',
+  network: data.unsignedCall.network
+});
+```
+
+This is the correct Connect call shape (`postConditionMode: 'deny'` + FT post-condition for sBTC).
+
+**Client-side guard (defense-in-depth)**
+Before calling Connect, the page re-checks `u` locally (decode/parse/expiry; `postConditionMode === 'deny'`; presence of FT PC). If any check fails → show **invalid/expired** state with **no** “Open wallet” button.&#x20;
+
+- Only If the magic-link is valid → `await request('stx_callContract', unsignedCall…)` using the fields from `u` (no fetch to server; no `/create-tx`).&#x20;
+
+**`u` payload (signed JSON, base64url)**
+
+```json
+{
+  "v": 1,
+  "storeId": "store_abc",
+  "invoiceId": "inv_8x3...",
+  "unsignedCall": {
+    "contractId": "SP...webpay",
+    "function": "pay-invoice",
+    "args": ["0x...invoiceId", "u25000"],
+    "postConditions": [
+      {
+        "type": "ft-postcondition",
+        "address": "<TX_SENDER or payerPrincipal>",
+        "asset": "SP...sbtc-token::sbtc",
+        "condition": "eq",
+        "amount": "25000"
+      }
+    ],
+    "postConditionMode": "deny",
+    "network": "mainnet"
+  },
+  "exp": 1737324800,
+  "sig": "<base64url HMAC-SHA256 over JSON.stringify({v,storeId,invoiceId,unsignedCall,exp})>"
+}
+
+```
+* Again: WEBPAY **must** refuse to generate the page for opening the wallet if `u` is missing/invalid/expired.
+
+- Once all these checks are performed the Checkout Page should implement a further Client-side guard (defense-in-depth)
+
+    - Before calling Connect, the page must re-check:
+
+    * Decode `u`; if parse fails → show **invalid** state (no “Open wallet” button).
+    * `exp` vs `Date.now()/1000`; if expired → **expired** state.
+    * `postConditionMode === 'deny'` and presence of FT post-condition; if missing → **invalid** state.
+    * Then call:
+
+    ```ts
+    await request('stx_callContract', {
+        contract: data.unsignedCall.contractId,
+        functionName: data.unsignedCall.function,
+        functionArgs: data.unsignedCall.args,
+        postConditions: data.unsignedCall.postConditions,
+        postConditionMode: 'deny',
+        network: data.unsignedCall.network
+    });
+    ```
+
+    (This is the correct Connect call shape with **Deny** mode and the FT post-condition.)
+
+---
+
+### 2.5 Merchant → WEBPAY “Checkout Redirect API”
+
+**Purpose:** a merchant starts a payment without holding WEBPAY/Bridge credentials.
+
+**Route (public, no merchant secret in browser):**
+
+* `POST /checkout/:storeId` with JSON `{ amount_sats, ttl_seconds, memo, orderId?, payerPrincipal? }` (preferred to avoid long URLs)
+
+**WEBPAY server behavior:**
+
+1. Validate basic shape (amount>0; TTL in \[120..1800]).
+2. **Server-to-server call** to the **Bridge**: `POST /api/v1/stores/:storeId/prepare-invoice` with the **stored per-store `X-API-Key`**.
+3. Expect `{ invoice, magicLink, unsignedCall }` from the Bridge.
+4. **302 Redirect** shopper to `magicLink`.
+
+> From the shopper’s perspective, Merchant → WEBPAY `/checkout` → **redirect** to magic-link → wallet opens.
+
+### 3) Bridge API (called by WEBPAY)
+
+> All endpoints below are **hosted by the Node.js Bridge**. WEBPAY is their caller (with `X-API-Key` where required). Admin/Merchant consoles in WEBPAY are **just UIs** that hit these Bridge endpoints.
+
+#### 3.0 Key material provisioning (Bridge)
+
+* **Rotate keys (admin/merchant)**
+
+  * `POST /api/admin/stores/:storeId/rotate-keys` → `{ apiKey, hmacSecret }` (one-time reveal).
+  * `POST /api/v1/stores/:storeId/rotate-keys` (optional).
+     WEBPAY stores both **apiKey** (to call the Bridge) and **hmacSecret** (to **verify `u` on magic-link**).
+
+#### 3.1 `POST /api/v1/stores/:storeId/prepare-invoice` (Bridge)
+
+**Host:** *Node.js Bridge.* **Caller:** *WEBPAY server* (never the merchant browser). Returns `{ invoice, magicLink, unsignedCall }`. Bridge **mints `u`** and **builds the magic-link** string.
+
+“These pre-creation gates are enforced in the **Bridge**. WEBPAY and the magic-link page only consume the payload.”
+* `magicLink` is **constructed by the Bridge**, pointing to WEBPAY’s `/w/...` with a freshly signed `u`.
+* `unsignedCall` is what WEBPAY embeds into `u` validation UI (and what the page uses to call Connect).
+
+WEBPAY’s must internally validate that the **store is active** and has its **sBTC token contract** configured; amount>0; TTL ∈ \[120..1800].
+**Effect:** persist invoice as `PAY_READY` with `quoteExpiresAt = now + ttl`.
+**Response:** single round‑trip payload used by both UI and magic‑link page.
+```json
+{
+  "invoice": {
+    "invoiceId": "inv_8x3…",
+    "storeId": "store_abc",
+    "status": "PAY_READY",
+    "amountSats": 25000,
+    "usdAtCreate": "17.19",
+    "quoteExpiresAt": "2025-09-18T12:34:56Z",
+    "merchantPrincipal": "SPxxxxx",
+    "memo": "Order #123"
+  },
+  "magicLink": "https://example.webpay.com/w/<storeId>/<invoiceId>",
+  "unsignedCall": {
+    "contractId": "SPxxxx.webpay",
+    "function": "pay-invoice",
+    "args": ["0x…invoiceId", "u25000"],
+    "postConditions": [
+      {
+        "type": "ft-postcondition",
+        "address": "<TX_SENDER or payerPrincipal>",
+        "asset": "<SBTC_CONTRACT>::sbtc",
+        "condition": "eq",
+        "amount": "25000"
+      }
+    ],
+    "postConditionMode": "deny",
+    "network": "mainnet"
+  }
+}
+```
+
+> `magicLink` is what you put in **QR**, **redirects**, and **emails**. `unsignedCall` is fed directly into `@stacks/connect`.
+
+#### 3.2 `GET /i/:invoiceId`
+Wherever is called this endpoint Returns a public DTO for rendering and polling status on the magic‑link page or any preview screen.
+**Host:** *Node.js Bridge;* CORS allows reads from `https://example.webpay.com` so WEBPAY pages can poll.
+
+```json
+{
+  "invoiceId": "inv_8x3…",          // public id (used in URLs and polling)
+  "idHex": "e3a1…9bc0",             // 64-hex on-chain id (buff(32))
+  "storeId": "store_abc",
+  "amountSats": 25000,
+  "usdAtCreate": "17.19",
+  "quoteExpiresAt": "2025-09-18T12:34:56Z",
+  "merchantPrincipal": "SP3…",
+  "status": "unpaid",               // 'paid' | 'canceled' | 'expired' | DB status (with 'pending' normalized → 'unpaid')
+  "payer": "SP2…",                  // undefined until known
+  "txId": "0xabc…",                 // undefined until broadcast/known
+  "memo": "Order #123",
+  "subscriptionId": "sub_…",        // present only if from a subscription
+  "createdAt": "2025-09-18T12:00:01Z",
+  "refundAmount": 1000,             // present after any refund
+  "refundTxId": "0xdef…",           // last refund tx
+  "store": {
+    "displayName": "Acme",
+    "logoUrl": "https://…",
+    "brandColor": "#FF7A00"
+  }
+}
+
+This endpoint is cross-origin readable; CORS allowed for `Origin: https://example.webpay.com` so the WEBPAY magic-link page can poll it.
+
+---
+
+## 5) Canonical flows
+
+### A) Merchant web checkout (redirect)
+
+### Sequence
+
+1. **Customer** clicks **Pay with sBTC** on the merchant site.
+2. **Merchant server** **redirects shopper to WEBPAY**:
+
+```
+POST https://example.webpay.com/checkout/
+Content-Type: application/json
+{
+  "amount_sats": 25000,
+  "ttl_seconds": 900,
+  "memo": "Order #123",
+  "orderId": "123",              // optional idempotency
+  "payerPrincipal": "SP..."       // optional: fix principal for PCs
+}
+```
+3. **WEBPAY server** calls the **Bridge**(server-to-server):
+   `POST /api/v1/stores/:storeId/prepare-invoice` (with stored `X-API-Key`).
+**Bridge response**
+```json
+{
+  "invoice": {
+    "invoiceId": "inv_8x3...",
+    "storeId": "store_abc",
+    "status": "PAY_READY",
+    "amountSats": 25000,
+    "usdAtCreate": "17.19",
+    "quoteExpiresAt": "2025-09-18T12:34:56Z",
+    "merchantPrincipal": "SP...",
+    "memo": "Order #123"
+  },
+  "magicLink": "https://example.webpay.com/w/store_abc/inv_8x3...?u=...&return=https%3A%2F%2Fmerchant.tld%2Fthanks",
+  "unsignedCall": { /* same shape as in §2.u */ }
+}
+```
+
+4. **Merchant server** 302‑redirects the shopper to `magicLink`.
+
+5. **WEBPAY magic-link page** validates `u`, then calls `request('stx_callContract', …)` (wallet opens). On broadcast, show **Broadcasted** and, if `return=` was present in the magic-link, redirect to it with `?txid=...`.
+6. **Status & webhook**: **Bridge** polls chain/observes events and serves `GET /i/:invoiceId`; **Bridge** emits the `invoice-paid` webhook (HMAC). WEBPAY UI may poll `/i/:invoiceId` for live status.
+
+**Notes**
+
+* **Fees/nonce** previews (for UX) can be computed using your node: `GET /v2/accounts/{principal}` and `POST /v2/fees/transaction`.
+
+#### Node.js calls consumed by this operation:
+
+##### A1. Merchant creates an invoice
+
+**WEBPAY action:** Merchant server hits WEBPAY to prepare an invoice, then 302-redirects shopper to `magicLink`.
+
+**Interface called (Node.js):**
+`POST /api/v1/stores/:storeId/prepare-invoice`
+
+**Request (from merchant → WEBPAY):**
+
+* `amount_sats` (number) — from merchant order.
+* `ttl_seconds` (120..1800) — from merchant config/UI.
+* `memo` (string) — from merchant order.
+* `orderId` (string, optional) — merchant idempotency key.
+* `payerPrincipal` (string, optional) — if merchant knows payer (locks FT PC principal).
+
+**Response (WEBPAY → merchant) and usage:**
+
+* `invoice` DTO → merchant may store; **WEBPAY** also stores and sets status `PAY_READY`.
+* `magicLink` (e.g., `https://example.webpay.com/w/<storeId>/<invoiceId>?u=...&return=...`) → merchant **redirect target** and the **QR contents** shown in any UI.
+* `unsignedCall` → the **exact spec** the **magic-link page** will pass to the wallet via Connect (already serialized args + FT post-condition + `postConditionMode: deny`).
+
+---
+
+##### A2. Shopper lands on the magic-link page
+
+**WEBPAY action:** the wallet is opened through The **page itself** via Connect with the embedded unsigned call.
+
+**Interface called (Node.js):** **None.** (By spec, the page **does not** call server; it uses `u=` to avoid a fetch.)
+
+**Data needed in page:** `u` blob (base64url JSON) with:
+
+* `unsignedCall` (contract id, fn, args, **FT PC on payer**, mode=deny, network).
+* `storeId`, `invoiceId`, `exp` (TTL).
+  The page decodes `u`, calls:
+
+```ts
+await request('stx_callContract', {
+  contract: data.unsignedCall.contractId,
+  functionName: data.unsignedCall.function,
+  functionArgs: data.unsignedCall.args,
+  postConditions: data.unsignedCall.postConditions,
+  postConditionMode: 'deny',
+  network: data.unsignedCall.network
+});
+```
+
+**Wallet response used by page:** `{ txid | txId }` → page shows “Broadcasted …” and, if `return=` was on the link, redirects to `return?txid=...`.
+
+---
+
+##### A3. Status updates after broadcast
+
+**WEBPAY action:** Any UI (page, POS, merchant) polls public invoice status.
+
+**Interface called (Node.js):**
+`GET /i/:invoiceId`
+
+**Request (from browser/POS):** none.
+
+**Response (WEBPAY → client) and usage:**
+
+* `status` (`PAY_READY|pending|paid|expired|canceled`) → drive UI states.
+* `txId`, `payer` (once known) → render receipt/links.
+* Branding field `store` → render shell (logo/color/name).
+  Used by: magic-link page, POS, dashboards.
+
+
+### B) POS (terminal/app)
+
+  * Step 1: Clerk enters amount in **WEBPAY POS**; WEBPAY → Bridge `POST /api/v1/stores/:storeId/prepare-invoice` (short TTL).
+  * Step 2: Bridge returns `{ invoice, magicLink, unsignedCall }`.
+  * Step 3: WEBPAY renders **QR = magic-link**. Customer scans → lands on WEBPAY magic-link page → Connect opens with pre-minted `u`.
+  * Step 4: POS polls **Bridge** `GET /i/:invoiceId` until `paid`.
+  > The POS runs on **WEBPAY**. Only **WEBPAY server** uses the store **`X-API-Key`** to call the Bridge; **never** expose the key to browsers or devices. `GET /i/:invoiceId` remains public and CORS-readable.
+
+
+#### B2) POS architecture — detailed (tablet/terminal or desktop app)
+
+**Actors**
+
+* **Clerk on POS device** (your app)
+* **WebPAY API** (your server)
+* **Customer’s wallet** (phone wallet or desktop extension) opened via **Connect**
+* **Self-hosted Stacks infra** (Node RPC + Blockchain API) for reads/broadcast/confirmations
+
+**Golden rule:** the POS **shows a QR of the **magic‑link** (`https://example.webpay.com/w/<storeId>/<invoiceId>?u=...&return=`)**. The wallet is only opened **from that page** via Connect; the POS never shows a custom wallet URI.
+
+---
+
+**Happy path (sequence + exact data)**
+
+**The POS application is accessible by going at `GET https://example.webpay.com/pos/:storeId`
+
+1. **Clerk enters amount** in a **WEBPAY-hosted POS UI** (merchant-authenticated session).
+
+```
+POST /api/v1/stores/:storeId/prepare-invoice
+Content-Type: application/json
+X-API-Key: <merchant key>
+
+{
+  "amount_sats": 75000,
+  "ttl_seconds": 300,
+  "memo": "POS #7 sale",
+  "orderId": "POS7-2025-09-19-001"   // optional idempotency
+}
+```
+
+**Response** (same shape as §4.1; POS uses `magicLink` for the QR):
+
+```json
+{
+  "invoice": {
+    "invoiceId": "inv_8x3...",
+    "storeId": "store_abc",
+    "status": "PAY_READY",
+    "amountSats": 75000,
+    "usdAtCreate": "51.49",
+    "quoteExpiresAt": "2025-09-19T11:22:33Z",
+    "merchantPrincipal": "SP....",
+    "memo": "POS #7 sale"
+  },
+  "magicLink": "https://example.webpay.com/w/<storeId>/<invoiceId>...",
+  "unsignedCall": {
+    "contractId": "SP....webpay",
+    "function": "pay-invoice",
+    "args": ["0x<invoiceIdHex>", "u75000"],
+    "postConditions": [
+      {
+        "type": "ft-postcondition",
+        "address": "<TX_SENDER>",
+        "asset": "SP...sbtc-token::sbtc",
+        "condition": "eq",
+        "amount": "75000"
+      }
+    ],
+    "postConditionMode": "deny",
+    "network": "mainnet"
+  }
+}
+```
+
+* The POS **renders the QR of `magicLink`** (plus an optional short code).
+* sBTC is treated as a **SIP‑010 FT**, so the FT post‑condition + **Deny** mode is standard.
+
+2. **WEBPAY server → Bridge**: WEBPAY calls the **Bridge** `POST /api/v1/stores/:storeId/prepare-invoice` (short TTL) **using the store’s API key**.
+3. **WEBPAY renders the QR = `magicLink`** (returned by the Bridge). Customer scans → lands on the **WEBPAY magic-link** page → wallet opens via Connect using the embedded `u`.&#x20;
+4. **POS UI polls** the **Bridge** `GET /i/:invoiceId` until `paid`.
+
+```
+GET /i/:invoiceId
+→ { status: "paid" | "pending" | "expired" | "canceled", txId?, payer?, ... }
+```
+
+Optionally, you may also consult your Blockchain API for TX details and/or call‑read your contract views for state checks.
+
+4. **Receipt (optional)** → Show “Paid ✓” with `txId`. Offer to print or display a tiny QR to the explorer.
+
+---
+
+**POS UI spec**
+**The POS application is accessible by going at `GET https://example.webpay.com/pos/:storeId`
+
+* **New Sale screen**
+  * Amount input (sats or fiat with preview)
+  * TTL picker (default 2–5 min)
+  * **Create** → calls `prepare-invoice`; **renders magic‑link QR** + countdown + cancel button
+  * Status strip: **Awaiting scan → Scanned (optional) → Wallet opened (optional) → Broadcast seen → Paid ✓**
+  * On **expiry**, offer **Create new invoice** with same amount
+
+* **Success screen**
+
+  * Big **Paid ✓**, short `txId`, **New sale** button
+
+* **Cancel option**
+
+  * If customer walks away: call `POST /api/v1/stores/:id/invoices/:invoiceId/cancel/create-tx` (preferred on-chain) or DTO fallback; after cancel, public builders for this invoice must refuse.
+
+---
+
+**Failure & edge cases**
+
+* **Expired before payment**
+
+  * Magic‑link/checkout page shows **Expired**; CTA: “Ask clerk to regenerate”
+  * POS flips to **Expired** at timer end; button: **New invoice**
+
+* **Store inactive / sBTC not configured**
+
+  * `prepare-invoice` returns 409/4xx; POS shows “Store not ready” (admin must activate store & set sBTC token)
+* **Customer didn’t tap Open Wallet**
+
+  * The magic‑link page keeps showing an **Open wallet** button as fallback for browsers that require a user gesture
+* **Broadcast pending**
+
+  * POS continues polling `/i/:invoiceId`; optionally show "Pending…" using your Blockchain API’s TX endpoint
+* **Refunds / cancels (post‑sale)**
+
+  * From the **Merchant dashboard**; POS may expose “Refund last sale”, which builds a `refund` unsigned call and opens a merchant wallet session via Connect
+
+---
+
+**Networking, auth, CORS**
+
+* POS is a **merchant‑auth client**: include **`X-API-Key`** on merchant routes
+* `GET /i/:invoiceId` is **public** (no key) so customer devices can also load it
+* If the POS is a web app, add its origin to `allowedOrigins` in the merchant profile
+* **All wallet opens happen on the magic‑link page via Connect** (`request('stx_callContract', …)`) — never directly from the POS
+
+---
+
+**Why this is robust for POS**
+
+* **One QR type** (the **magic‑link**) keeps the terminal simple and works across any wallet/platform
+* **Wallet UX** is delegated to **Connect**, which opens the installed wallet and returns `txId`; plus FT post‑conditions + **Deny** mode provide strong safety guarantees
+
+---
+
+**Minimal POS pseudo‑code**
+
+```ts
+// create
+const res = await fetch(`/api/v1/stores/${storeId}/prepare-invoice`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-API-Key': MERCHANT_API_KEY },
+  body: JSON.stringify({ amount_sats, ttl_seconds, memo })
+});
+const { invoice, magicLink } = await res.json();
+showQR(magicLink);
+startCountdown(invoice.quoteExpiresAt);
+
+// poll
+const poll = setInterval(async () => {
+  const dto = await fetch(`/i/${invoice.invoiceId}`).then(r => r.json());
+  if (dto.status === 'paid') { clearInterval(poll); beepGreen(); showPaid(dto.txId); }
+  if (dto.status === 'expired' || dto.status === 'canceled') { clearInterval(poll); showExpired(); }
+}, 1000);
+
+// cancel (operator)
+await fetch(`/api/v1/stores/${storeId}/invoices/${invoice.invoiceId}/cancel/create-tx`, {
+  method: 'POST', headers: { 'X-API-Key': MERCHANT_API_KEY }
+});
+```
+
+#### Node.js calls consumed by the POS Route
+##### B1. Clerk creates a short-TTL invoice
+
+**Interface:** `POST /api/v1/stores/:storeId/prepare-invoice` (same as A1)
+
+**Request:** `{ amount_sats, ttl_seconds (2–5m), memo, orderId? }`
+
+**Response / Usage:**
+
+* Show **QR = magicLink**.
+* Start countdown to `invoice.quoteExpiresAt`.
+* Cache `invoice.invoiceId` for status polling.
+
+##### B2. POS polls status
+
+**Interface:** `GET /i/:invoiceId` → UI transitions to **Paid ✓** on `status: "paid"`.
+
+##### B3. Operator cancels unpaid
+
+**Primary interface:**
+`POST /api/v1/stores/:storeId/invoices/:invoiceId/cancel/create-tx` → returns **unsigned cancel**; POS opens **merchant wallet** to sign & broadcast.
+**Fallback (DTO):**
+`POST /api/v1/stores/:storeId/invoices/:invoiceId/cancel` → returns `{ canceled: true }`.
+
+**Request data:** `storeId`, `invoiceId` (from prior prepare/create).
+**Response usage:** if on-chain path succeeds → observe cancel event; otherwise DTO path sets `status:"canceled"`; from then, `POST /create-tx` **must block** for that invoice (409).
+
+##### B3. POS Public Rebndering Theme
+GET /api/v1/stores/:storeId/public-profile is a public, cacheable branding/support payload that any WEBPAY public surface (magic-link checkout page, POS preview, email templates, hosted links) can fetch without merchant auth to render the shell around an invoice:
+{
+    displayName: store.display_name ?? null, //page title/brand name
+    logoUrl: store.logo_url ?? null, //logo image
+    brandColor: store.brand_color ?? null,
+    supportEmail: store.support_email ?? null, //support contact entry points
+    supportUrl: store.support_url ?? null
+}
+
+
+### C) Subscriptions
+
+#### 1.1 Subscription Pay page (direct mode)
+
+**Route:** `GET /s/:storeId/:subscriptionId`
+**Purpose:** Open wallet to execute `pay-subscription` when due.
+    `u` for subscription **pay** and **manage** links is **created and signed by the Bridge**; the links are **hosted by WEBPAY** under `/s/...` and validated the same way as invoice links
+
+
+* **One collection mode:** **invoice-mode**. Subscriptions generate periodical **invoices**;
+* customers pay those invoices via the **same magic-link flow** already defined for one-off invoices (**see §1–2 Magic-link, §3.1 prepare-invoice, §3.2 GET /i**).
+* Emailing: **send magic-link** on subscription invoice creation; **no extra email management** (per scope notes).
+
+---
+
+#### 1) Merchant Console — Subscriptions
+The WEBPAY UI **only** calls **Bridge** endpoints; responses include `magicLink` + `unsignedCall` minted by the Bridge.
+
+##### 1.1 Subscriptions Index
+
+* **Table columns:** Subscriber (principal + identicon), Amount (sats), Interval (blocks), Status (Active/Cancelled), Next due (time/block), Last billed, Mode (always `invoice` here).
+* **Filters:** Status, Next-due window (overdue / due soon / scheduled), text search by subscriber/ID.
+* **Empty state:** “No subscriptions yet” + **Create** CTA.
+* The **Bridge** mints the subscription `u` for `pay-subscription` and constructs `https://example.webpay.com/s/<storeId>/<subscriptionId>?u=...`. **WEBPAY hosts/validates** the page, then opens Connect. Same `u` verification rules as invoices apply.&#x20;
+
+##### 1.2 Create Subscription (modal)
+
+* **Fields:** Subscriber principal (required), Amount (sats, >0), Interval (blocks, >0).
+* **Action:** POST **`/api/v1/stores/:storeId/subscriptions`**.
+  On success: add to table; toast “Subscription created”.
+* **Validation & errors:** Show bridge errors as toasts (`validation_error`, etc.).
+
+##### 1.3 Row Actions (invoice-mode)
+
+* **Generate invoice now**
+
+  * Call **`POST /api/v1/stores/:storeId/subscriptions/:id/invoice`** with `{ ttl_seconds, memo? }`.
+  * On success: show a success sheet with **Amount**, **Expires**, **Copy Link**, **Send Email**.
+  * **Magic-link** and `unsignedCall` come from the bridge; **customer payment uses the standard magic-link page** (see §1–2).
+* **Send email** (from the success sheet or row)
+
+  * Trigger WEBPAY emailer with the **magic-link** (simple branded template).
+* **Cancel subscription**
+
+  * Call **`POST /api/v1/stores/:storeId/subscriptions/:id/cancel`**.
+  * If response includes an **unsigned on-chain call**, open wallet via Connect (reuse the same “sign in wallet” component used elsewhere in the console).
+  * On success: mark row **Cancelled**.
+* **Details drawer**
+
+  * Show schedule: interval, **next due**, **last billed**.
+  * **History:** subscription-related webhooks/events (see §3).
+  * **Linked invoices:** list recent invoices created for this subscription (ID, status, created/time to expire); each row has **Copy Link** and **Open invoice** (standard invoice detail drawer).
+
+* **Cancel subscription**
+
+**Who:** Merchant
+**UI:** Row action **Cancel** → confirm modal.
+
+**Endpoint**
+
+* `POST /api/v1/stores/:storeId/subscriptions/:subId/cancel` → `{ canceled:true }` or unsigned `cancel-subscription` (then sign).
+
+
+---
+
+
+# Admin Console
+All **Admin endpoints** (`/api/admin/...`) are **Bridge-hosted**. The WEBPAY Admin UI is just a client. The **poller** and **webhook dispatcher** run in the **Bridge**.
+**The Admin Console is accessible by going at `GET https://example.webpay.com/admin`
+
+## Shop Management Flows
+
+### Create store (idempotent) + list
+
+**Who:** Admin
+**UI:** New‑store form; table of stores. On 409 conflict, auto‑select existing row.
+
+**Endpoints**
+
+* `POST /api/admin/stores` body: `{ principal, name, display_name, logo_url, brand_color, allowed_origins, webhook_url }`
+* `GET /api/admin/stores` (on 409 to resolve idempotency)
+
+---
+
+### Activate / Deactivate store
+
+**Who:** Admin
+**UI:** Toggle in store row; badge “Active/Inactive”.
+
+**Endpoint**
+
+* `PATCH /api/admin/stores/:storeId/activate` body: `{ active: true|false }` → `{ active }`
+
+**Effects**
+
+* When **inactive**, builders (e.g., `/create-tx`) must return 4xx, and on‑chain `pay-invoice` will abort per contract. The magic page may still open the wallet, but the tx will fail; surface reason after confirm.
+
+---
+
+## Admin Functions
+
+### Admin bootstrap (on‑chain)
+
+**Who:** Admin (global)
+**UI:** “Initialize protocol” card → **Generate unsigned** → **Sign in wallet** modal → tx status banner.
+
+**Endpoints**
+
+1. `POST /api/admin/bootstrap` → `{ call }` (unsigned).
+2. Broadcast via wallet (Connect). Treat `abort_by_response u1` as idempotent success.
+
+---
+
+### Rotate API/HMAC keys
+
+
+**Who:** Admin (primary), Merchant (optional)
+**UI:** “Rotate keys” action with **one‑time** secret reveal; copy‑to‑clipboard; warning that future calls will **not re‑expose** secrets.
+
+**Endpoints**
+
+* Admin: `POST /api/admin/stores/:storeId/rotate-keys`
+  • 1st call returns `{ apiKey, hmacSecret }`
+  • Subsequent calls must **not** re‑expose (409/403 acceptable).
+* Merchant (optional): `POST /api/v1/stores/:storeId/rotate-keys` (may exist; may return secrets or be unavailable).
+
+> On rotate, **WEBPAY stores both**:
+> • `apiKey` → used by WEBPAY to call the Bridge server-to-server
+> • `hmacSecret` → used by WEBPAY to **verify `u`** on magic-link pages.
+> The **Bridge** stores `hmacSecret` to **mint `u`**. (One-time reveal semantics remain unchanged.)
+
+---
+
+### Set sBTC token (required before builders work)
+
+**Who:** Admin
+**UI:** “Configure sBTC token” form (`contractAddress`, `contractName`) → **Generate unsigned** → **Sign** → “Configured” state.
+
+**Endpoint**
+
+* `POST /api/admin/set-sbtc-token` body: `{ contractAddress, contractName }` → `{ call }` (unsigned) → sign in wallet.
+
+**Why:** Until configured, public/merchant builders should 409 `invalid_state`.
+
+---
+
+### On‑chain sync helper (admin)
+
+**Who:** Admin
+**UI:** “Sync on‑chain” button → list of **unsigned calls** (`register-merchant`, `set-merchant-active`, `create-invoice` for DTOs). Click to **Sign** each; idempotent aborts are surfaced as **already done**.
+
+**Endpoint**
+
+* `POST /api/admin/stores/:storeId/sync-onchain` → `{ calls: UnsignedCall[] }`
+
+---
+
+### Poller controls & admin logs
+
+**Who:** Admin
+**UI:** Poller status card (running, lastHeight, `lagBlocks`), **Restart** button; Admin webhooks list with **retry**.
+
+**Endpoints**
+
+* `GET /api/admin/poller` → `{ running, lastRunAt, lastHeight, lastTxId, lagBlocks }`
+* `POST /api/admin/poller/restart` → `{ running }`
+* `GET /api/admin/webhooks?status=all|failed&storeId=…`
+* `POST /api/admin/webhooks/retry` body: `{ webhookLogId }`
+
+---
+
+# Merchant Console
+The WEBPAY Merchant UI calls **Bridge** `/api/v1/...` endpoints using a server-side session that carries the store’s **API key** (never exposed to browsers).
+**The Merchant Console is accessible by going at `GET https://pay.webpay.com/merchant/:storeId`
+
+## Private profile & branding (incl. CORS & webhook)
+
+**Who:** Merchant
+**UI:** Settings page with live public preview,
+
+**Endpoints**
+
+* `GET /api/v1/stores/:storeId/profile`
+* `PATCH /api/v1/stores/:storeId/profile` body: `{ displayName, brandColor, allowedOrigins, webhookUrl }`
+* Public preview: `GET /api/v1/stores/:storeId/public-profile`
+
+---
+
+## Invoice Management
+
+### Manual Invoice (dashboard DTO path)
+
+**UI**: “Create invoice” modal (amount/memo/TTL) → success sheet shows **Amount**, **Expires**, **Copy Link**, **Email**.
+
+**Endpoint**
+
+```
+POST /api/v1/stores/:storeId/prepare-invoice
+→ { invoice, magicLink, unsignedCall }
+```
+
+**Send**: copy the **magic‑link** or trigger an email from WEBPAY.
+
+---
+
+### Invoice Ledger — one table, state‑driven actions
+
+A single **Invoices** table drives all operations; row actions are enabled by `status`.
+
+| Status      | Actions (row)                                          |
+| ----------- | ------------------------------------------------------ |
+| `PAY_READY` | Copy Link · Open Checkout · **Cancel** · (POS) Show QR |
+| `pending`   | View Tx · Await Confirm                                |
+| `paid`      | **Refund** (drawer) · Print/Receipt · View Tx          |
+| `expired`   | Create New (prefill) · Archive                         |
+| `canceled`  | —                                                      |
+
+**Cancel unpaid**
+
+* Preferred: `POST /api/v1/stores/:storeId/invoices/:invoiceId/cancel/create-tx` → sign in wallet.
+* Fallback: `POST /api/v1/stores/:storeId/invoices/:invoiceId/cancel` → `{ canceled: true }`.
+* After cancel, public `POST /create-tx` for that invoice **must** return `409 invalid_state`.
+
+**Refunds**
+
+* `POST /api/v1/stores/:storeId/refunds/create-tx` `{ invoiceId, amount_sats, memo }` → unsigned `refund-invoice`.
+* Drawer shows **paid / refunded / remaining**; confirms in wallet; ledger updates `refundAmount`.
+
+**Listings & details**
+
+* `GET /api/v1/stores/:storeId/invoices?status=…` · `GET /api/v1/stores/:storeId/invoices/:invoiceId`.
+
+---
+
+### Refunds (partial / full)
+
+**Who:** Merchant
+**UI:** Refund drawer showing **paid**, **already refunded**, **remaining**; slider/field to choose amount; **Create refund** → **Sign in wallet**; toast shows `invoice-refunded`.
+
+**Endpoint**
+
+* `POST /api/v1/stores/:storeId/refunds/create-tx` body: `{ invoiceId, amount_sats, memo }` → unsigned `refund-invoice`.
+
+**Rules (contract‑enforced, surfaced in UI)**
+
+* Must be **paid** first (else `u301` or builder 409).
+* Amount ≤ **remaining** (else `u305`).
+* Token must equal configured sBTC (wrong token `u307`).
+* On success, mirror `refundAmount` increments; webhook `invoice-refunded` may fire (HMAC).
+
+---
+
+## Invoice listings & details
+
+**Who:** Merchant
+**UI:** Invoices table with filters (`status=unpaid`, `subscriptionId` filter) and details drawer.
+
+**Endpoints**
+
+* `GET /api/v1/stores/:storeId/invoices?status=unpaid`
+* `GET /api/v1/stores/:storeId/invoices/:invoiceId`
+
+---
+
+## Webhooks — merchant logs
+
+**Who:** Merchant
+**UI:** Table of deliveries with HMAC verification badge; detail panel shows raw payload & headers.
+
+**Endpoint**
+
+* `GET /api/v1/stores/:storeId/webhooks`
+
+---
+
+# Public Builder & Checkout (shared UI)
+These endpoints are **Bridge-hosted**. **The magic-link page never calls `/create-tx`**; it uses the pre-minted `u`. The builder is kept for SDK/diagnostics and advanced clients.
+**This route is **Bridge-hosted**; WEBPAY does **not** proxy it. The magic-link path **does not** call this route; it uses `u`.**
+To activate this route in WEBPAY we do
+`POST https://example.webpay.com/checkout/:storeId` with JSON `{ amount_sats, ttl_seconds, memo, orderId?, payerPrincipal? }`
+
+**UI:** The **Open Wallet** (Webpay button on the checkout page uses Connect to sign the `unsignedCall`; QR encodes **`magicLink`** (not a custom URI).
+
+**Endpoints**
+
+* `POST /create-tx` body: `{ invoiceId, payerPrincipal }` → unsigned `pay-invoice`
+  • Bad/unknown UUID → 4xx
+  • **Expired/Cancelled/Inactive** → **409 invalid\_state**
+  • CORS preflight allowed (`OPTIONS /create-tx`)
+
+**Wallet & fees**
+
+* Wallet opens via **Connect** and returns `txId` upon broadcast.
+* Fee/nonce estimates via Node RPC to improve totals UX.
+
+> To start checkout via WEBPAY, merchants call **WEBPAY**:
+> `POST https://example.webpay.com/checkout/:storeId` with `{ amount_sats, ttl_seconds, memo, orderId?, payerPrincipal? }`.
+> **WEBPAY** will call the **Bridge** `prepare-invoice` and redirect to the resulting **magic-link**.
+
+---
+
+# Subscriptions (invoice‑mode + direct)
+## 7) Subscriptions — links & UI
+
+We add a subscription‑specific link and screens for end users.
+
+### 7.1 Subscription **Pay Link** (direct mode)
+
+```
+https://example.webpay.com/s/<storeId>/<subscriptionId>?u=...
+```
+
+* `u` is a short‑lived, signed blob with the prepared **`pay-subscription`** call (when due).
+* Page behavior: validate `u` → **Open wallet** via Connect → show result.
+* If **not due**, page shows **Not due yet** and the **next due** time.
+
+### 7.2 Subscription **Manage Link** (cancel)
+
+```
+https://example.webpay.com/s/<storeId>/<subscriptionId>/manage?u=...
+```
+
+* Offers **Cancel subscription** → launches unsigned `cancel-subscription` (from `u`) → sign in wallet.
+
+
+| Concern                              | Who hosts  | Who calls it                   | Notes                                                                                                |
+| ------------------------------------ | ---------- | ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `/checkout/:storeId`                 | **WEBPAY** | Merchant server                | Starts redirect flow; WEBPAY→Bridge `prepare-invoice`; WEBPAY redirects to magic-link                |
+| `/api/v1/stores/:id/prepare-invoice` | **Bridge** | **WEBPAY** server              | Returns `{invoice, magicLink (with u), unsignedCall}`; **Bridge mints `u`**                          |
+| Magic-link pages `/w/...` `/s/...`   | **WEBPAY** | Shopper                        | WEBPAY **verifies `u`** then calls Connect (`postConditionMode:'deny'` + FT PC)                      |
+| `/i/:invoiceId`                      | **Bridge** | WEBPAY pages, POS, merchant    | Public DTO; CORS readable                                                                            |
+| `/create-tx`                         | **Bridge** | SDKs/tools                     | Not used by magic-link; remains for power users                                                      |
+| `/api/admin/...`, poller/webhooks    | **Bridge** | WEBPAY Admin UI                | Bridge runs poller + dispatcher                                                                      |
+| Rotate keys                          | **Bridge** | Admin/Merchant (via WEBPAY UI) | Bridge returns `apiKey` + `hmacSecret`; both stored by WEBPAY; WEBPAY verifies `u`, Bridge mints `u` |
+| Access POS page                      | **WEBPAY** | GET https://pay.webpay.com/pos/:storeId      | POS (open terminal) |
+| Access Merchant console              | **WEBPAY** | GET https://pay.webpay.com/merchant/:storeId       | Merchant Console |
+| Access Admin console                 | **WEBPAY** | GET GET https://pay/webpay.com/admin       | Admin Console |

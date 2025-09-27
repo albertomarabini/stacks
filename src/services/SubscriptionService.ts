@@ -55,7 +55,7 @@ export class SubscriptionService {
     const tip = await this.chain.getTip();
     const nextInvoiceAt = tip.height + body.intervalBlocks;
     const mode = body.mode ?? 'invoice';
-    
+
     const row: SubscriptionRow = {
       id,
       id_hex: idHex,
@@ -88,79 +88,88 @@ export class SubscriptionService {
     return { row, unsignedCall };
   }
 
-  async generateInvoiceForSubscription(
-    sub: SubscriptionRow,
-    opts: {
-      storeId: string;
-      merchantPrincipal: string;
-      ttlSeconds: number;
-      memo?: string;
-      webhookUrl?: string;
-    },
-  ): Promise<{ invoice: PublicInvoiceDTO; unsignedCall: UnsignedContractCall }> {
-    const idHex = this.generateUniqueInvoiceHex();
-    const nowMs = Date.now();
-    const nowSecs = Math.floor(nowMs / 1000);
-    const usdAtCreate = await this.pricing.getUsdPriceSnapshot();
-    const tip = await this.chain.getTip();
-    const avgBlockSecs = this.cfg.getAvgBlockSecs();
-    const expiresAtBlocks = tip.height + Math.ceil(opts.ttlSeconds / avgBlockSecs);
-    const quoteExpiresAt = nowMs + opts.ttlSeconds * 1000;
+// src/services/SubscriptionService.ts
+async generateInvoiceForSubscription(
+  sub: SubscriptionRow,
+  opts: { storeId: string; merchantPrincipal: string; ttlSeconds: number; memo?: string; webhookUrl?: string }
+): Promise<{ invoice: PublicInvoiceDTO; unsignedCall: UnsignedContractCall }> {
+  const idHex = this.generateUniqueInvoiceHex();
+  const nowMs = Date.now();
+  const nowSecs = Math.floor(nowMs / 1000);
 
-    const unsignedCall = this.builder.buildCreateInvoice({
-      idHex,
-      amountSats: sub.amount_sats,
-      memo: opts.memo,
-      expiresAtBlock: expiresAtBlocks,
-    });
-
-    const idRaw = crypto.randomUUID();
-
-    this.store.invoices.insert({
-      id_raw: idRaw,
-      id_hex: idHex,
-      store_id: opts.storeId,
-      amount_sats: sub.amount_sats,
-      usd_at_create: usdAtCreate,
-      quote_expires_at: quoteExpiresAt,
-      merchant_principal: opts.merchantPrincipal,
-      status: 'unpaid',
-      payer: undefined,
-      txid: undefined,
-      memo: opts.memo,
-      webhook_url: opts.webhookUrl,
-      created_at: nowSecs,
-      refunded_at: undefined,
-      refund_amount: 0,
-      refund_txid: undefined,
-      subscription_id: sub.id,
-      refund_count: 0,
-      expired: 0,
-    });
-
-    this.store.advanceSubscriptionSchedule(sub.id);
-
-    const invoice: PublicInvoiceDTO = {
-      invoiceId: idRaw,
-      idHex,
-      storeId: opts.storeId,
-      amountSats: sub.amount_sats,
-      usdAtCreate,
-      quoteExpiresAt: quoteExpiresAt,
-      merchantPrincipal: opts.merchantPrincipal,
-      status: 'unpaid',
-      payer: undefined,
-      txId: undefined,
-      memo: opts.memo ?? undefined,
-      subscriptionId: sub.id,
-      createdAt: nowSecs,
-      refundAmount: undefined,
-      refundTxId: undefined,
-      store: undefined,
-    };
-
-    return { invoice, unsignedCall };
+  // --- USD price snapshot with fallback (match InvoiceService.createInvoice) ---
+  let usdAtCreate: number;
+  try {
+    usdAtCreate = await this.pricing.getUsdPriceSnapshot();
+  } catch (e: any) {
+    // don’t fail the request — UI only uses this for display
+    const fallback = Number(process.env.PRICE_SNAPSHOT_DEFAULT ?? 0);
+    usdAtCreate = Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
   }
+
+  // --- expiry (add cushion; avoid instant-expire edge cases) ---
+  const avgBlockSecs = this.cfg.getAvgBlockSecs?.() ?? 30;
+  const minCushionBlocks = 10;
+  const tip = await this.chain.getTip(); // assumes { height }
+  const ttlBlocks = Math.ceil(opts.ttlSeconds / avgBlockSecs);
+  const expiresAtBlock = tip.height + Math.max(minCushionBlocks, ttlBlocks + 1);
+
+  const unsignedCall = this.builder.buildCreateInvoice({
+    idHex,
+    amountSats: sub.amount_sats,
+    memo: opts.memo,
+    expiresAtBlock,
+  });
+
+  const idRaw = crypto.randomUUID();
+  const quoteExpiresAt = nowMs + opts.ttlSeconds * 1000;
+
+  this.store.invoices.insert({
+    id_raw: idRaw,
+    id_hex: idHex,
+    store_id: opts.storeId,
+    amount_sats: sub.amount_sats,
+    usd_at_create: usdAtCreate,
+    quote_expires_at: quoteExpiresAt,
+    merchant_principal: opts.merchantPrincipal,
+    status: 'unpaid',
+    payer: undefined,
+    txid: undefined,
+    memo: opts.memo,
+    webhook_url: opts.webhookUrl,
+    created_at: nowSecs,
+    refunded_at: undefined,
+    refund_amount: 0,
+    refund_txid: undefined,
+    subscription_id: sub.id,
+    refund_count: 0,
+    expired: 0,
+  });
+
+  // Best-effort; don’t let this break the response
+  try { this.store.advanceSubscriptionSchedule(sub.id); } catch {}
+
+  const invoice: PublicInvoiceDTO = {
+    invoiceId: idRaw,
+    idHex,
+    storeId: opts.storeId,
+    amountSats: sub.amount_sats,
+    usdAtCreate,
+    quoteExpiresAt,
+    merchantPrincipal: opts.merchantPrincipal,
+    status: 'unpaid',
+    payer: undefined,
+    txId: undefined,
+    memo: opts.memo ?? undefined,
+    subscriptionId: sub.id,
+    createdAt: nowSecs,
+    refundAmount: 0,
+    refundTxId: undefined,
+    store: undefined,
+  };
+
+  return { invoice, unsignedCall };
+}
 
   async setMode(
     sub: SubscriptionRow,

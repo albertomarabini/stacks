@@ -21,6 +21,7 @@ export interface ISqliteStore {
   rotateKeysPersist(storeId: string, apiKey: string, hmacSecret: string, now: number):number;
   markKeysRevealedOnce(storeId: string, expectVersion: number, now: number):boolean;
   getMerchantById(storeId: string): MerchantRow | undefined;
+  getInvoiceStatusByHex(idHex: string): InvoiceStatus | undefined;
   updateMerchantProfile(
     storeId: string,
     patch: Partial<Pick<
@@ -35,7 +36,7 @@ export interface ISqliteStore {
       | 'allowed_origins'
     >>
   ): void;
-  
+
   // Invoices
   invoices: {
     insert(row: InvoiceRow): void;
@@ -54,6 +55,11 @@ export interface ISqliteStore {
   ensureInvoiceIdHexUnique(idHex: string): boolean;
   invoiceExists(idHex: string): boolean;
   bulkMarkExpired(idRawList: string[]): number;
+  selectInvoicesByStatuses(
+    statuses: InvoiceStatus[],
+    limit: number,
+    storeId?: string
+  ): Pick<InvoiceRow, 'id_hex' | 'status' | 'refund_amount' | 'merchant_principal'>[];
 
   // Subscriptions
   insertSubscription(row: SubscriptionRow): void;

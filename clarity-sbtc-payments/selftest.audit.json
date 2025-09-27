@@ -1,11 +1,11 @@
 {
-  "startedAt": "2025-09-02T18:48:43.825Z",
+  "startedAt": "2025-09-09T15:24:32.536Z",
   "mode": "devnet",
   "core": "http://localhost:20443",
   "api": "http://localhost:3999",
   "contracts": {
     "payment": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
-    "token": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mock-sbtc-token"
+    "token": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
   },
   "calls": [
     {
@@ -15,25 +15,25 @@
       "function": "get-admin",
       "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
       "argsRepr": [],
-      "startedAt": "2025-09-02T18:48:43.904Z",
+      "startedAt": "2025-09-09T15:24:32.574Z",
       "durationMs": 20,
-      "resultRepr": "0x09",
+      "resultRepr": "(some ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM)",
       "events": []
     },
     {
       "mode": "devnet",
       "kind": "public",
-      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mock-sbtc-token",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token",
       "function": "bootstrap-owner",
       "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
       "argsRepr": [],
-      "startedAt": "2025-09-02T18:48:43.925Z",
-      "txid": "0c153fdd27e1adf95f6815aea5a21442e4c063e907e69a3a3b1d98a97805b1d0",
-      "nonce": 2,
+      "startedAt": "2025-09-09T15:24:32.595Z",
+      "txid": "90c25d117f981084c9ebe26995c18ff5aaf546c860b42b2375f4b22dba3d7ff0",
+      "nonce": 32,
       "fee": 3000,
-      "txStatus": "success",
-      "durationMs": 9579,
-      "resultRepr": "(ok true)",
+      "txStatus": "abort_by_response",
+      "durationMs": 3198,
+      "resultRepr": "(err u100)",
       "events": []
     },
     {
@@ -43,13 +43,13 @@
       "function": "bootstrap-admin",
       "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
       "argsRepr": [],
-      "startedAt": "2025-09-02T18:48:53.504Z",
-      "txid": "3ad43627125334683a69f354571d62cbed121520c9b62c3884eb3cf349f31729",
-      "nonce": 3,
+      "startedAt": "2025-09-09T15:24:35.794Z",
+      "txid": "c0cbfb2d2e56bf15c3d4db18cdc043f152aa661476a020020f04241cfed1e2a1",
+      "nonce": 33,
       "fee": 3000,
-      "txStatus": "success",
-      "durationMs": 58566,
-      "resultRepr": "(ok true)",
+      "txStatus": "abort_by_response",
+      "durationMs": 3053,
+      "resultRepr": "(err u1)",
       "events": []
     },
     {
@@ -59,45 +59,9 @@
       "function": "get-sbtc",
       "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
       "argsRepr": [],
-      "startedAt": "2025-09-02T18:49:52.070Z",
-      "durationMs": 125,
-      "resultRepr": "0x09",
-      "events": []
-    },
-    {
-      "mode": "devnet",
-      "kind": "public",
-      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
-      "function": "set-sbtc-token",
-      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
-      "argsRepr": [
-        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mock-sbtc-token"
-      ],
-      "startedAt": "2025-09-02T18:49:52.196Z",
-      "txid": "576cc32645f8202d3bf303ee49bf157bf7318b7e3fdbca8bab432f51da0920b8",
-      "nonce": 4,
-      "fee": 3000,
-      "txStatus": "success",
-      "durationMs": 60097,
-      "resultRepr": "(ok true)",
-      "events": []
-    },
-    {
-      "mode": "devnet",
-      "kind": "public",
-      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
-      "function": "set-sbtc-token",
-      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
-      "argsRepr": [
-        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.mock-sbtc-token"
-      ],
-      "startedAt": "2025-09-02T18:50:52.293Z",
-      "txid": "ace4564daf8103ddac12716671438eaf2db74759688ba59896ef4e972542f01f",
-      "nonce": 0,
-      "fee": 3000,
-      "txStatus": "abort_by_response",
-      "durationMs": 60011,
-      "resultRepr": "(err u3)",
+      "startedAt": "2025-09-09T15:24:38.847Z",
+      "durationMs": 12,
+      "resultRepr": "(some ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token)",
       "events": []
     },
     {
@@ -110,18 +74,1701 @@
         "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
         "none"
       ],
-      "startedAt": "2025-09-02T18:51:52.305Z",
-      "txid": "e3767f19e83e532e2318cb475442937a2aa14ac7cdd5ee97a7e0fabc2d27f7dd",
-      "nonce": 5,
+      "startedAt": "2025-09-09T15:24:38.859Z",
+      "txid": "c24555a1251da141fbe42b5bdc1445f41aa51b9c0886ccab45575c65584c5d20",
+      "nonce": 34,
       "fee": 3000,
-      "txStatus": "timeout",
-      "durationMs": 90193
+      "txStatus": "abort_by_response",
+      "durationMs": 3064,
+      "resultRepr": "(err u402)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-merchant-active",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "true"
+      ],
+      "startedAt": "2025-09-09T15:24:41.923Z",
+      "txid": "00ad9224b5d7c132afef89eb0aa8f824de5fa9aa0c981d30fcfb108d92aa6cf2",
+      "nonce": 35,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3055,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (active true) (event \"merchant-active-updated\") (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x81ddd8a7cb8b0b405d497470131d677c69628cf2aceabbc4bb250a34842caafb",
+        "u100",
+        "none",
+        "(some u271)"
+      ],
+      "startedAt": "2025-09-09T15:24:44.988Z",
+      "txid": "ca5ec22523c7d2b85e9051ae7146ebf7e4b7eba1d6e2e0e4c36bd8309688098d",
+      "nonce": 35,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 4620,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u100) (event \"invoice-created\") (expiresAt (some u271)) (id 0x81ddd8a7cb8b0b405d497470131d677c69628cf2aceabbc4bb250a34842caafb) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token",
+      "function": "mint",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u100"
+      ],
+      "startedAt": "2025-09-09T15:24:49.608Z",
+      "txid": "55a9a56f3859ede657d52ff2b9435a4418d23d20d19def5a4c5b4d9b2622c6e0",
+      "nonce": 36,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 1533,
+      "resultRepr": "(ok true)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-invoice",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0x81ddd8a7cb8b0b405d497470131d677c69628cf2aceabbc4bb250a34842caafb",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:24:51.141Z",
+      "txid": "9f5249e2eef5f0e73cc372e23e246a724a28a426db4cca8b4b0fd74d6e697e58",
+      "nonce": 16,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3077,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u100) (event \"invoice-paid\") (id 0x81ddd8a7cb8b0b405d497470131d677c69628cf2aceabbc4bb250a34842caafb) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (payer 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5))"
+        }
+      ]
+    },
+    {
+      "vmRejected": true,
+      "reason": "BadTraitImplementation"
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-sbtc-token",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:24:54.416Z",
+      "txid": "cca9b06a1cdc24480277d5159be55920ca4ff37695c7757f70f8ffcb0453e232",
+      "nonce": 9,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3106,
+      "resultRepr": "(err u3)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "bootstrap-admin",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [],
+      "startedAt": "2025-09-09T15:24:57.522Z",
+      "txid": "f516d4719cf8af55b69bcac5d919e0b1ac8c495df9307e4e31563da42420de19",
+      "nonce": 37,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3054,
+      "resultRepr": "(err u1)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "register-merchant",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+        "none"
+      ],
+      "startedAt": "2025-09-09T15:25:00.576Z",
+      "txid": "cd727d67702780ab8cdb8f767b0c8bbbe6d130ba48948b3adeb396a27a677f49",
+      "nonce": 10,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 1529,
+      "resultRepr": "(err u401)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-merchant-active",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "false"
+      ],
+      "startedAt": "2025-09-09T15:25:02.105Z",
+      "txid": "9fdb781e669b97342cb0e34175bec1246ea899e616b83a4d9460aa8d4fd33101",
+      "nonce": 11,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3061,
+      "resultRepr": "(err u7)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-merchant-active",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+        "true"
+      ],
+      "startedAt": "2025-09-09T15:25:05.166Z",
+      "txid": "e37540e98fb515c886507c7d7a76dd985819542a8bc7121c9e4a7b5ef6b406c8",
+      "nonce": 38,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3062,
+      "resultRepr": "(err u608)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "register-merchant",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "none"
+      ],
+      "startedAt": "2025-09-09T15:25:08.228Z",
+      "txid": "42439faf73e71f1f0c07fc85d92c15c352c910fdc713d83d79812420df933324",
+      "nonce": 39,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3063,
+      "resultRepr": "(err u402)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x6211f90958277f3070c2946747b9ed3b71b3f89368b764b2374af99cde3bb9fa",
+        "u12345",
+        "none",
+        "(some u186)"
+      ],
+      "startedAt": "2025-09-09T15:25:11.299Z",
+      "txid": "1733634180e6d7144943a4387bbdb0afe4f8c12eb020d47374fa6cb105a44e3f",
+      "nonce": 12,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3072,
+      "resultRepr": "(err u101)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a",
+        "u25000",
+        "none",
+        "none"
+      ],
+      "startedAt": "2025-09-09T15:25:14.371Z",
+      "txid": "ad415b62dee1d826476bfc232648ec8205b43553f5f22f080932640f74dddfdf",
+      "nonce": 36,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 1539,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u25000) (event \"invoice-created\") (expiresAt none) (id 0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a",
+        "u25000",
+        "none",
+        "none"
+      ],
+      "startedAt": "2025-09-09T15:25:15.910Z",
+      "txid": "b6d826ff62be3414acc307b7d61acb8e657d7b46c32a440b3a72f0637f64511c",
+      "nonce": 37,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3049,
+      "resultRepr": "(err u103)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x5cc98261c785e589cb1ce63056d58dd938d52115c172dbf5281ec4e6930f3018",
+        "u25000",
+        "none",
+        "(some u0)"
+      ],
+      "startedAt": "2025-09-09T15:25:18.959Z",
+      "txid": "7e758ec112916ef56c7680631381f8db77fd7a4853243763efd24a6c5cb5b7e8",
+      "nonce": 38,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3060,
+      "resultRepr": "(err u104)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x1243201dc2746bb16fe7cc2908a0cb8e3025d0ff910b36f823eb8e33aef23000",
+        "u25000",
+        "none",
+        "(some u285)"
+      ],
+      "startedAt": "2025-09-09T15:25:22.030Z",
+      "txid": "4e023d23479b8d4b9138a4647753726f3ff0c1eb1bca7b3efd17627280bc1fd6",
+      "nonce": 39,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3065,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u25000) (event \"invoice-created\") (expiresAt (some u285)) (id 0x1243201dc2746bb16fe7cc2908a0cb8e3025d0ff910b36f823eb8e33aef23000) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "vmRejected": true,
+      "reason": "BadTraitImplementation"
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x0985a04b3ec463f0a52d473c41708712225cda6e8f3c00fd525b5571e2caa5f0",
+        "u25000",
+        "none",
+        "(some u286)"
+      ],
+      "startedAt": "2025-09-09T15:25:25.277Z",
+      "txid": "cbbaf11883d08b019f4d2c6102ae87a49520855da2abdebd9d30932cb8c064ef",
+      "nonce": 40,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 1532,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u25000) (event \"invoice-created\") (expiresAt (some u286)) (id 0x0985a04b3ec463f0a52d473c41708712225cda6e8f3c00fd525b5571e2caa5f0) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "vmRejected": true,
+      "reason": "BadTraitImplementation"
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xc48c6c0b7895ba566fe79d68ace06481e26c732230b29a868df99a93ccc4daeb",
+        "u25000",
+        "none",
+        "(some u287)"
+      ],
+      "startedAt": "2025-09-09T15:25:27.009Z",
+      "txid": "79143143685f69af4424ddc77d61f80f010d51edf941877e66dac701e28ad2d8",
+      "nonce": 41,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3066,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u25000) (event \"invoice-created\") (expiresAt (some u287)) (id 0xc48c6c0b7895ba566fe79d68ace06481e26c732230b29a868df99a93ccc4daeb) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xc48c6c0b7895ba566fe79d68ace06481e26c732230b29a868df99a93ccc4daeb"
+      ],
+      "startedAt": "2025-09-09T15:25:30.075Z",
+      "txid": "05c5498b69be54f99d61fa04ac6f5c04e0dc0d8ce4baf2f0730e6d7cc2b59060",
+      "nonce": 42,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3058,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (event \"invoice-canceled\") (id 0xc48c6c0b7895ba566fe79d68ace06481e26c732230b29a868df99a93ccc4daeb) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-invoice",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0xc48c6c0b7895ba566fe79d68ace06481e26c732230b29a868df99a93ccc4daeb"
+      ],
+      "startedAt": "2025-09-09T15:25:33.133Z",
+      "txid": "78d85b5d77fabacb83f379bb41eae76df5e6491ddf6c1f04d9c26118d72d4d2c",
+      "nonce": 13,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3070,
+      "resultRepr": "(err u603)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xc48c6c0b7895ba566fe79d68ace06481e26c732230b29a868df99a93ccc4daeb"
+      ],
+      "startedAt": "2025-09-09T15:25:36.203Z",
+      "txid": "f2e9596ea4ba972c1b704b1833d30a53929d4a05405bf42c73b601d58633630b",
+      "nonce": 43,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 1531,
+      "resultRepr": "(err u603)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-invoice-status",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0xc48c6c0b7895ba566fe79d68ace06481e26c732230b29a868df99a93ccc4daeb"
+      ],
+      "startedAt": "2025-09-09T15:25:37.735Z",
+      "durationMs": 10,
+      "resultRepr": "\"canceled\"",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-invoice",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0xc48c6c0b7895ba566fe79d68ace06481e26c732230b29a868df99a93ccc4daeb",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:25:37.745Z",
+      "txid": "d0a40bdedfa3c0c8e7092b01bac6a659bf23940796e136d313e185035bf8a71a",
+      "nonce": 17,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3063,
+      "resultRepr": "(err u202)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x5a325f5f6f4107082f31cafd1b79100250417188717d98a35e039cefb11087b4",
+        "u1111",
+        "none",
+        "(some u292)"
+      ],
+      "startedAt": "2025-09-09T15:25:40.819Z",
+      "txid": "599c332d559bd565ed389dedf24612958d6a188eaaa22d7e717c0e2aa8f39ab4",
+      "nonce": 44,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3064,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u1111) (event \"invoice-created\") (expiresAt (some u292)) (id 0x5a325f5f6f4107082f31cafd1b79100250417188717d98a35e039cefb11087b4) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-merchant-active",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "false"
+      ],
+      "startedAt": "2025-09-09T15:25:43.883Z",
+      "txid": "65c2206c3c4dbd15fa8fc5488e6c66e3112401a6dc7d372970639f654524a5f0",
+      "nonce": 40,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 4595,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (active false) (event \"merchant-active-updated\") (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-invoice",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0x5a325f5f6f4107082f31cafd1b79100250417188717d98a35e039cefb11087b4",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:25:48.478Z",
+      "txid": "5f5690a000334287d3fd35bb44bb7b0b7b2418c602b1d1b7eeac1602a9431f42",
+      "nonce": 18,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3053,
+      "resultRepr": "(err u205)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x577759e17a7bfb05161d08738f2349089897b5912557f01d4c7068154e266af4",
+        "u2222",
+        "none",
+        "(some u296)"
+      ],
+      "startedAt": "2025-09-09T15:25:51.538Z",
+      "txid": "95962569ead8162b7690aa52be3958ec77aa7fa73eabeeeedf0da5e6d253ba59",
+      "nonce": 45,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3066,
+      "resultRepr": "(err u102)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-merchant-active",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "true"
+      ],
+      "startedAt": "2025-09-09T15:25:54.605Z",
+      "txid": "6e21617185f4cdae72d06ef80bad74208cfc6da22db43787ebc37ceeb75f1880",
+      "nonce": 41,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 1539,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (active true) (event \"merchant-active-updated\") (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x7b3ab6eb17d1605b67cb0108b2d4e243c3c4750af9408787bb070884dcb49eaf",
+        "u25000",
+        "none",
+        "(some u200)"
+      ],
+      "startedAt": "2025-09-09T15:25:56.151Z",
+      "txid": "9e4cc306baf3bb559747050d4684f19d956e898526cacb58a8b4c735d656589c",
+      "nonce": 46,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3055,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u25000) (event \"invoice-created\") (expiresAt (some u200)) (id 0x7b3ab6eb17d1605b67cb0108b2d4e243c3c4750af9408787bb070884dcb49eaf) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token",
+      "function": "mint",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u25000"
+      ],
+      "startedAt": "2025-09-09T15:25:59.207Z",
+      "txid": "d1593734b5fb3e398a70f1343932c925414433fca6191e9a10efd4ad8fa77315",
+      "nonce": 42,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3051,
+      "resultRepr": "(ok true)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-invoice",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:02.258Z",
+      "txid": "4322a7882e666a0c5772a436822364e105641df3d1c45466d09745593ad8de5c",
+      "nonce": 19,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3064,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u25000) (event \"invoice-paid\") (id 0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (payer 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-invoice",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:05.322Z",
+      "txid": "b8776093bec9d4623eda8b4195e3cc4305b289195728932064663f73282b8ed9",
+      "nonce": 20,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3071,
+      "resultRepr": "(err u201)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-invoice",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a"
+      ],
+      "startedAt": "2025-09-09T15:26:08.394Z",
+      "txid": "86d92090445485dca133bdaa40db728f254d31e2df00583062ec7c5ec511135c",
+      "nonce": 43,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 1532,
+      "resultRepr": "(err u602)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x2e3852475b871cfb10d42e79a4ba7890b0329b3a5b0b68c7307cae6aaad93d3f",
+        "u2222",
+        "none",
+        "(some u303)"
+      ],
+      "startedAt": "2025-09-09T15:26:09.933Z",
+      "txid": "f60df2210cd69a24ad9dbca4d22eaacce33203f6f0e304ac7aced32c7e647c14",
+      "nonce": 47,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3065,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u2222) (event \"invoice-created\") (expiresAt (some u303)) (id 0x2e3852475b871cfb10d42e79a4ba7890b0329b3a5b0b68c7307cae6aaad93d3f) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-invoice",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "0x2e3852475b871cfb10d42e79a4ba7890b0329b3a5b0b68c7307cae6aaad93d3f"
+      ],
+      "startedAt": "2025-09-09T15:26:12.998Z",
+      "txid": "fa8e00c4f564a534c9e9a0201ae594669105cc88428defb64411d57c6f426ac1",
+      "nonce": 44,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3054,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (event \"invoice-canceled\") (id 0x2e3852475b871cfb10d42e79a4ba7890b0329b3a5b0b68c7307cae6aaad93d3f) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-invoice",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "0xe25515ef02a9a944d5af34b00a40f4e1d719b328cf1ac16e23ac3e7fd80e79e5"
+      ],
+      "startedAt": "2025-09-09T15:26:16.052Z",
+      "txid": "bf9fbd90ba792d4078416f5a2ff7fccfc360613ffc9c0ac3e98f19f13303f2e8",
+      "nonce": 45,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3055,
+      "resultRepr": "(err u600)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f",
+        "u10000",
+        "none",
+        "(some u306)"
+      ],
+      "startedAt": "2025-09-09T15:26:19.115Z",
+      "txid": "d34d87d348f7bdc99eb1f4eb3a42147bf0094a916f57e145c27c4a50431ee644",
+      "nonce": 48,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 1532,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u10000) (event \"invoice-created\") (expiresAt (some u306)) (id 0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token",
+      "function": "mint",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u10000"
+      ],
+      "startedAt": "2025-09-09T15:26:20.647Z",
+      "txid": "a48cdeb668968a27a327b34bccdae861c57a9b3f418a4cdb051d3ce20bf0baae",
+      "nonce": 46,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3101,
+      "resultRepr": "(ok true)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-invoice",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:23.748Z",
+      "txid": "1845a2abb2e9be2f663d034f9303c65fca8741943eb59dbeeb8bf86dcbc23030",
+      "nonce": 21,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3061,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u10000) (event \"invoice-paid\") (id 0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (payer 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "refund-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f",
+        "u11000",
+        "none",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:26.809Z",
+      "txid": "a3fe74dddb5981b0cadca4ea0d306c817ee436f8a0939df51716c36074074504",
+      "nonce": 49,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3063,
+      "resultRepr": "(err u305)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "refund-invoice",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f",
+        "u1000",
+        "none",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:29.872Z",
+      "txid": "ebaf47ee4788d6e0744b7566054c882a4e67146b5508a89affb608cccf826c4d",
+      "nonce": 14,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3051,
+      "resultRepr": "(err u303)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "refund-invoice",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f",
+        "u1000",
+        "none",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:32.923Z",
+      "txid": "54a27039a958b4ecf726e389fda76f0307e974ae739520f56616590b45725642",
+      "nonce": 47,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 1541,
+      "resultRepr": "(err u303)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "refund-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f",
+        "u1000",
+        "none",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:34.464Z",
+      "txid": "e543279689cdb43f53bb5228a7c0163ce36c819e4c314b2f71a16ac07b912e66",
+      "nonce": 50,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3050,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u1000) (event \"invoice-refunded\") (id 0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (payer 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5) (refundTotal u1000))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "refund-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f",
+        "u9000",
+        "none",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:37.514Z",
+      "txid": "1e9b58926592d3109c60b58e5ed77a4edaa2d7b672eb96123be472124b692ef0",
+      "nonce": 51,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3059,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u9000) (event \"invoice-refunded\") (id 0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (payer 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5) (refundTotal u10000))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "refund-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x44290742c4bae81e4cfbb6867a9757693d99c32aff4051dbe31e786193c1f91f",
+        "u1",
+        "none",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:40.573Z",
+      "txid": "1e243e226e9fd0ab6e35229eb57b25c86cb94674ad1a95d6007e6384759c954a",
+      "nonce": 52,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3065,
+      "resultRepr": "(err u305)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x5039916de3a4ec91ab7488b6592acb023416c5c61ed4d64456052c6107727a52",
+        "u100",
+        "none",
+        "(some u315)"
+      ],
+      "startedAt": "2025-09-09T15:26:43.651Z",
+      "txid": "1a0ccbf0beeeaf8ac4d1b7021e50591d3beaccb60c4655ef61b98be8e3bc468f",
+      "nonce": 53,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 6127,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u100) (event \"invoice-created\") (expiresAt (some u315)) (id 0x5039916de3a4ec91ab7488b6592acb023416c5c61ed4d64456052c6107727a52) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token",
+      "function": "mint",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u100"
+      ],
+      "startedAt": "2025-09-09T15:26:49.778Z",
+      "txid": "0265a0c114271067ee68021ed64a52ddb0c980fded0cc3f89c5420ac2952477e",
+      "nonce": 48,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 1532,
+      "resultRepr": "(ok true)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-invoice",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0x5039916de3a4ec91ab7488b6592acb023416c5c61ed4d64456052c6107727a52",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:51.310Z",
+      "txid": "b27f8e614696266a83d1a8ead667263e4779d7357d414c8061b3626a23beccfe",
+      "nonce": 22,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3060,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u100) (event \"invoice-paid\") (id 0x5039916de3a4ec91ab7488b6592acb023416c5c61ed4d64456052c6107727a52) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (payer 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5))"
+        }
+      ]
+    },
+    {
+      "vmRejected": true,
+      "reason": "BadTraitImplementation"
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xe4d8ae2c1d46a78375ba5dbf7b3197a7ba40d90deb1d5fa10c34b73c252cc214",
+        "u3333",
+        "none",
+        "(some u319)"
+      ],
+      "startedAt": "2025-09-09T15:26:54.577Z",
+      "txid": "b8ddb79736e8a2746ed5e60fd6755bd406642da2c23879456e22e6d4ecd25c32",
+      "nonce": 54,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3072,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u3333) (event \"invoice-created\") (expiresAt (some u319)) (id 0xe4d8ae2c1d46a78375ba5dbf7b3197a7ba40d90deb1d5fa10c34b73c252cc214) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "refund-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xe4d8ae2c1d46a78375ba5dbf7b3197a7ba40d90deb1d5fa10c34b73c252cc214",
+        "u1",
+        "none",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:26:57.650Z",
+      "txid": "267cc436bdb7634b506c0ae4e42e7648c2b2b502e05ddbd8a86782e2e6b58a46",
+      "nonce": 55,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3057,
+      "resultRepr": "(err u301)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-subscription",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8",
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u777",
+        "u2000"
+      ],
+      "startedAt": "2025-09-09T15:27:00.707Z",
+      "txid": "b7d7df92a1cd2388f1abfb02303d3ea5d8b0d21e370eded13c4c887fce842683",
+      "nonce": 56,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 1533,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u777) (event \"subscription-created\") (id 0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8) (interval u2000) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (nextDue u2107) (subscriber 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "next-due",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8"
+      ],
+      "startedAt": "2025-09-09T15:27:02.240Z",
+      "durationMs": 37,
+      "resultRepr": "(some u2107)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-subscription",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:27:02.284Z",
+      "txid": "10b20874c13dfad92267a8d90651bfd3db354f85ff14ce1c63ff2b9632003686",
+      "nonce": 23,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3070,
+      "resultRepr": "(err u503)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-subscription",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0xf393bd3110aa4105d77c3b5af5a4fc5ac1206bb7e298f2537f1612eabbe8f93b",
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u1",
+        "u3"
+      ],
+      "startedAt": "2025-09-09T15:27:05.354Z",
+      "txid": "dea1cd898504042218cab99a4a90a1bbaf2881535da07c146babc665b4bedbba",
+      "nonce": 24,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3063,
+      "resultRepr": "(err u500)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-subscription",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:27:08.417Z",
+      "txid": "dd85d50f400f2cd981c38ca8dcb3e52d6877d2b7714207864776ec45d45a3089",
+      "nonce": 15,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3042,
+      "resultRepr": "(err u502)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-subscription",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:27:11.459Z",
+      "txid": "286793e0a84b9815e1c11f62924647e7d40f2c337913aa480a027800e63b947e",
+      "nonce": 57,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3067,
+      "resultRepr": "(err u502)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-subscription",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xff5bca54666597f4e7a8306d20ecd67b7281152fa2636d6fc802151ce9c112bd",
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u1",
+        "u0"
+      ],
+      "startedAt": "2025-09-09T15:27:14.526Z",
+      "txid": "6ce13bad71820db443097ba0bdfb8a6997c0aca29b5db45a1866294844a329ed",
+      "nonce": 58,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 1535,
+      "resultRepr": "(err u501)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-merchant-active",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "false"
+      ],
+      "startedAt": "2025-09-09T15:27:16.062Z",
+      "txid": "b615de85a521a2d506ea5a28633247235fe0f26e1bba85b40a1806e3d3ea2da2",
+      "nonce": 49,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3071,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (active false) (event \"merchant-active-updated\") (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-subscription",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0xfcebedab6597e8eb116e73bf40e92eed1544f9016f8d53272de283214790421e",
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u2",
+        "u3"
+      ],
+      "startedAt": "2025-09-09T15:27:19.134Z",
+      "txid": "244204753cfd0f43740ccec84c561b4a44ccc5902404929684f9d27faf88d162",
+      "nonce": 59,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3086,
+      "resultRepr": "(err u205)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "set-merchant-active",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "true"
+      ],
+      "startedAt": "2025-09-09T15:27:22.221Z",
+      "txid": "0d7a64e20d88512e321448b2caa0068c2f2504a47d9902bc15dbeecc92553805",
+      "nonce": 50,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3049,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (active true) (event \"merchant-active-updated\") (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token",
+      "function": "mint",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u777"
+      ],
+      "startedAt": "2025-09-09T15:27:25.270Z",
+      "txid": "a0e822f44ff59f198f4fc3dc487dab74c50913b15470a5818de247f59ffd5b4c",
+      "nonce": 51,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3064,
+      "resultRepr": "(ok true)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "next-due",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8"
+      ],
+      "startedAt": "2025-09-09T15:27:28.334Z",
+      "durationMs": 11,
+      "resultRepr": "(some u2107)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-subscription",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x381c088e464ca8ad53064adc3013d385db2d265c29931d7a3c27bb27cd478f4b",
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u5",
+        "u3"
+      ],
+      "startedAt": "2025-09-09T15:27:28.345Z",
+      "txid": "ee63d665f8c110ee72b4fb5054153e81a07148d26e425fcc39baa7a3657eac59",
+      "nonce": 60,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 1540,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u5) (event \"subscription-created\") (id 0x381c088e464ca8ad53064adc3013d385db2d265c29931d7a3c27bb27cd478f4b) (interval u3) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (nextDue u110) (subscriber 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-subscription",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x381c088e464ca8ad53064adc3013d385db2d265c29931d7a3c27bb27cd478f4b"
+      ],
+      "startedAt": "2025-09-09T15:27:29.885Z",
+      "txid": "f987068bf48638f3959d67f5cdb23245e1fcfb32dccfbd4e9a3d532da0f93948",
+      "nonce": 16,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 3057,
+      "resultRepr": "(err u701)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-subscription",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "0x381c088e464ca8ad53064adc3013d385db2d265c29931d7a3c27bb27cd478f4b"
+      ],
+      "startedAt": "2025-09-09T15:27:32.943Z",
+      "txid": "b5a3908803a7d5afc59218898fabc9f7c3b229efbb6a2ed24cb2f091e6725cae",
+      "nonce": 52,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3081,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (event \"subscription-canceled\") (id 0x381c088e464ca8ad53064adc3013d385db2d265c29931d7a3c27bb27cd478f4b) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-subscription",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8"
+      ],
+      "startedAt": "2025-09-09T15:27:36.024Z",
+      "txid": "b057e3ee05e463a524eef98b92cd0bd2883625fb9ee95d1b8de4ab034760fea2",
+      "nonce": 61,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3061,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (event \"subscription-canceled\") (id 0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "pay-subscription",
+      "sender": "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8",
+        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token"
+      ],
+      "startedAt": "2025-09-09T15:27:39.086Z",
+      "txid": "20f5075efbefb74010ab95ce7d259d5cf9d204740342980173afd5017858d05e",
+      "nonce": 25,
+      "fee": 3000,
+      "txStatus": "abort_by_response",
+      "durationMs": 1533,
+      "resultRepr": "(err u504)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-subscription",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x81b5c082200b5df6449555838d0f83978137959240a21dfa4f724ca5f482a0da",
+        "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+        "ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5",
+        "u1",
+        "u3"
+      ],
+      "startedAt": "2025-09-09T15:27:40.619Z",
+      "txid": "9d225470dfd63f86ec227dab38ba515ad32b1568ddfc8b8068a11efffa578bc4",
+      "nonce": 62,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3066,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u1) (event \"subscription-created\") (id 0x81b5c082200b5df6449555838d0f83978137959240a21dfa4f724ca5f482a0da) (interval u3) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (nextDue u110) (subscriber 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "cancel-subscription",
+      "sender": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM",
+      "argsRepr": [
+        "0x81b5c082200b5df6449555838d0f83978137959240a21dfa4f724ca5f482a0da"
+      ],
+      "startedAt": "2025-09-09T15:27:43.685Z",
+      "txid": "d3bc8483852ca8cf1d11e37bb5704c0c88616afabac1d849ca92b24b953774f8",
+      "nonce": 53,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 4571,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (event \"subscription-canceled\") (id 0x81b5c082200b5df6449555838d0f83978137959240a21dfa4f724ca5f482a0da) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-subscription",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8"
+      ],
+      "startedAt": "2025-09-09T15:27:48.256Z",
+      "durationMs": 12,
+      "resultRepr": "(some (tuple (active false) (amount u777) (interval u2000) (last-paid none) (merchant ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (next-due u2107) (subscriber ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5)))",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "next-due",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x76299fd4a99f436bd3f9d9e92fd685e637cfd8d0147806a96ee833cfe774b8c8"
+      ],
+      "startedAt": "2025-09-09T15:27:48.269Z",
+      "durationMs": 62,
+      "resultRepr": "(some u2107)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-subscription",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x52e5f52146978c6c03151a1d9441d656ecf7b88578aa6d16bb63a716dd01c03f"
+      ],
+      "startedAt": "2025-09-09T15:27:48.331Z",
+      "durationMs": 49,
+      "resultRepr": "none",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "next-due",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x52e5f52146978c6c03151a1d9441d656ecf7b88578aa6d16bb63a716dd01c03f"
+      ],
+      "startedAt": "2025-09-09T15:27:48.380Z",
+      "durationMs": 50,
+      "resultRepr": "none",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-invoice-status",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a"
+      ],
+      "startedAt": "2025-09-09T15:27:48.430Z",
+      "durationMs": 51,
+      "resultRepr": "\"paid\"",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-invoice",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a"
+      ],
+      "startedAt": "2025-09-09T15:27:48.481Z",
+      "durationMs": 52,
+      "resultRepr": "(some (tuple (amount u25000) (canceled false) (expired false) (expires-at none) (memo none) (merchant ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG) (paid true) (payer (some ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5)) (refund-amount u0)))",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "is-paid",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0xa79b6afbb165568698db58678e8a6398bf073f3e506d54095142b433d18bb32a"
+      ],
+      "startedAt": "2025-09-09T15:27:48.534Z",
+      "durationMs": 56,
+      "resultRepr": "true",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-invoice",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x646bb1acbb92654fdf4529d78c2b0f965945bb2707032044280143cb6be6271d"
+      ],
+      "startedAt": "2025-09-09T15:27:48.590Z",
+      "durationMs": 50,
+      "resultRepr": "none",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-invoice-status",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0xd89c9a77e87b2dcda151f1fc292a12f3bc7b07e716e31ea57c337af13260f1f5"
+      ],
+      "startedAt": "2025-09-09T15:27:48.640Z",
+      "durationMs": 49,
+      "resultRepr": "\"not-found\"",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "public",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "create-invoice",
+      "sender": "ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG",
+      "argsRepr": [
+        "0x69d7c3afb233ce67afb61354e1a6c2dc853035a4b981f36b815cb9b22bf23e88",
+        "u1234",
+        "none",
+        "(some u339)"
+      ],
+      "startedAt": "2025-09-09T15:27:48.698Z",
+      "txid": "5f91cf7767b1b18b858461e616ba514c922ffcb62afa6c1316a1e82ee989032e",
+      "nonce": 63,
+      "fee": 3000,
+      "txStatus": "success",
+      "durationMs": 3046,
+      "resultRepr": "(ok true)",
+      "events": [
+        {
+          "type": "print",
+          "data": "(tuple (amount u1234) (event \"invoice-created\") (expiresAt (some u339)) (id 0x69d7c3afb233ce67afb61354e1a6c2dc853035a4b981f36b815cb9b22bf23e88) (memo none) (merchant 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG))"
+        }
+      ]
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "is-paid",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [
+        "0x69d7c3afb233ce67afb61354e1a6c2dc853035a4b981f36b815cb9b22bf23e88"
+      ],
+      "startedAt": "2025-09-09T15:27:51.744Z",
+      "durationMs": 6,
+      "resultRepr": "false",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-sbtc",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [],
+      "startedAt": "2025-09-09T15:27:51.750Z",
+      "durationMs": 50,
+      "resultRepr": "(some ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-token)",
+      "events": []
+    },
+    {
+      "mode": "devnet",
+      "kind": "readonly",
+      "contract": "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment",
+      "function": "get-admin",
+      "sender": "ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC",
+      "argsRepr": [],
+      "startedAt": "2025-09-09T15:27:51.800Z",
+      "durationMs": 53,
+      "resultRepr": "(some ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM)",
+      "events": []
     }
   ],
   "summary": {
-    "pass": 4,
+    "pass": 85,
     "fail": 0,
-    "skip": 0
+    "skip": 3
   },
-  "finishedAt": "2025-09-02T18:53:22.499Z"
+  "finishedAt": "2025-09-09T15:27:51.853Z"
 }

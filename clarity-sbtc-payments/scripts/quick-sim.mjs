@@ -221,7 +221,7 @@ function setupOk(results, label, simnet, contract, fn, args, sender) {
 
     // Contracts
     const PAYMENT = "sbtc-payment";
-    const TOKEN = "mock-sbtc-token";
+    const TOKEN = "sbtc-token";
     const tokenPrincipal = Cl.contractPrincipal(deployer, TOKEN);
 
     const results = [];

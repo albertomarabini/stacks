@@ -16,7 +16,7 @@
  *   TX_FEE_USTX=2000 | TX_NONCE | TX_NONCE_OFFSET | TX_WAIT_MS=90000 // CHANGE: default 90s
  *   CONTRACT_DEPLOYER_ADDR (optional)
  *   SBTC_PAYMENT_CONTRACT  (optional, full id ST... .sbtc-payment)
- *   MOCK_TOKEN_CONTRACT    (optional, full id ST... .mock-sbtc-token)
+ *   MOCK_TOKEN_CONTRACT    (optional, full id ST... .sbtc-token)
  *
  * Audit:
  *   AUDIT=1 (default) | AUDIT_FILE=selftest.audit.json | AUDIT_STDOUT=1
@@ -441,7 +441,7 @@ async function createHarness() {
   async function callReadOnlyFn(contract, fn, args, sender) {
     if (CONTRACT_ID_PAYMENT && contract === "sbtc-payment")
       contract = CONTRACT_ID_PAYMENT;
-    if (CONTRACT_ID_TOKEN && contract === "mock-sbtc-token")
+    if (CONTRACT_ID_TOKEN && contract === "sbtc-token")
       contract = CONTRACT_ID_TOKEN;
 
     const [addr, name] = parseContract(contract);
@@ -504,7 +504,7 @@ async function createHarness() {
   async function callPublicFn(contract, fn, args, sender) {
     if (CONTRACT_ID_PAYMENT && contract === "sbtc-payment")
       contract = CONTRACT_ID_PAYMENT;
-    if (CONTRACT_ID_TOKEN && contract === "mock-sbtc-token")
+    if (CONTRACT_ID_TOKEN && contract === "sbtc-token")
       contract = CONTRACT_ID_TOKEN;
 
     const [addr, name] = parseContract(contract);
@@ -771,7 +771,7 @@ function isTraitMismatch(r) {
 
   // Contracts (allow full-id overrides via env for devnet/testnet)
   const PAYMENT = process.env.SBTC_PAYMENT_CONTRACT || "sbtc-payment";
-  const TOKEN = process.env.MOCK_TOKEN_CONTRACT || "mock-sbtc-token";
+  const TOKEN = process.env.MOCK_TOKEN_CONTRACT || "sbtc-token";
 
   // tokenPrincipal
   let tokenPrincipal;

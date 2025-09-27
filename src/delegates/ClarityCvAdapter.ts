@@ -14,6 +14,55 @@ export class ClarityCvAdapter {
     }
     return buf;
   }
+  decodeOptionalInvoiceTuple(cv: ClarityValue, idHex: string): {
+    status?: string;
+    paidAtHeight?: number;
+    lastChangeHeight?: number;
+    lastTxId?: string;
+    refundAmount?: number | string | bigint;
+    amountSats?: number | string | bigint;
+    payer?: string;
+  } | undefined {
+    const j: any = cvToJSON(cv);
+
+    // Optional response: either `(none)` or `(some (tuple ...))`
+    if (j?.type === 'none') return undefined;
+
+    const t: any = j?.value;
+    if (!t || typeof t !== 'object') return undefined;
+
+    // Common field names (tolerate minor variations)
+    const status = String(t.status ?? t['status'] ?? '').toLowerCase() || undefined;
+
+    // Heights (some contracts expose only one of these)
+    const paidAtHeight = Number.isFinite(Number(t['paid-at-height'])) ? Number(t['paid-at-height'])
+                        : Number.isFinite(Number(t['paidAtHeight']))   ? Number(t['paidAtHeight'])
+                        : undefined;
+
+    const lastChangeHeight = Number.isFinite(Number(t['last-change-height'])) ? Number(t['last-change-height'])
+                            : Number.isFinite(Number(t['lastChangeHeight']))   ? Number(t['lastChangeHeight'])
+                            : undefined;
+
+    const lastTxId = t['last-txid'] ?? t['lastTxId'] ?? t['txid'] ?? undefined;
+
+    // Amounts – keep as number|string|bigint so poller can coerce
+    const amountSats  = t['amount'] ?? t['amount-sats'] ?? t['amountSats'];
+    const refundAmount= t['refund'] ?? t['refund-amount'] ?? t['refundAmount'];
+
+    // Payer / sender principal
+    const payer = t['payer'] ?? t['sender'] ?? undefined;
+
+    return {
+      status,
+      paidAtHeight,
+      lastChangeHeight,
+      lastTxId: typeof lastTxId === 'string' && lastTxId ? String(lastTxId) : undefined,
+      refundAmount,
+      amountSats,
+      payer: payer ? String(payer) : undefined,
+    };
+  }
+
 
   decodeOptionalContractPrincipal(
     cv: ClarityValue,

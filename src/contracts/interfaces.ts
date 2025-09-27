@@ -7,9 +7,6 @@ import type {
 
 export interface IStacksChainClient {
   callReadOnly(fn: string, args: any[]): Promise<any>;
-  readInvoiceStatus(
-    idHex: string,
-  ): Promise<'not-found' | 'paid' | 'canceled' | 'expired' | 'unpaid'>;
   readSbtcToken(): Promise<{ contractAddress: string; contractName: string } | undefined>;
   readSubscription(idHex: string): Promise<OnChainSubscription | undefined>;
   getTip(): Promise<{ height: number; blockHash: string }>;

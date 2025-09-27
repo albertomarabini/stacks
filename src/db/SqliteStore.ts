@@ -261,15 +261,13 @@ export class SqliteStore implements ISqliteStore {
   ): InvoiceRow[] {
     if (opts?.status) {
       const stmt = this.db.prepare(
-        `SELECT * FROM invoices WHERE store_id = ? AND status = ? ORDER BY created_at ${
-          opts.orderByCreatedDesc ? 'DESC' : 'ASC'
+        `SELECT * FROM invoices WHERE store_id = ? AND status = ? ORDER BY created_at ${opts.orderByCreatedDesc ? 'DESC' : 'ASC'
         }`,
       );
       return stmt.all(storeId, opts.status) as InvoiceRow[];
     }
     const stmt = this.db.prepare(
-      `SELECT * FROM invoices WHERE store_id = ? ORDER BY created_at ${
-        opts?.orderByCreatedDesc ? 'DESC' : 'ASC'
+      `SELECT * FROM invoices WHERE store_id = ? ORDER BY created_at ${opts?.orderByCreatedDesc ? 'DESC' : 'ASC'
       }`,
     );
     return stmt.all(storeId) as InvoiceRow[];
@@ -529,6 +527,49 @@ export class SqliteStore implements ISqliteStore {
     return row?.id;
   }
 
+
+  selectInvoicesByStatuses(
+    statuses: InvoiceStatus[],
+    limit: number,
+    storeId?: string
+  ): Pick<InvoiceRow, 'id_hex' | 'status' | 'refund_amount' | 'merchant_principal'>[] {
+    if (typeof statuses === "string")
+      statuses =[statuses]
+    if (!Array.isArray(statuses) || statuses.length === 0) return [];
+
+    const cols = `id_hex, status, refund_amount, merchant_principal`;
+    const wheres: string[] = [];
+    const params: any[] = [];
+
+    if (storeId) {
+      wheres.push(`store_id = ?`);
+      params.push(storeId);
+    }
+    const placeholders = statuses.map(() => '?').join(',');
+    wheres.push(`status IN (${placeholders})`);
+    params.push(...statuses);
+
+    const whereSql = wheres.length ? `WHERE ${wheres.join(' AND ')}` : '';
+    const sql = `
+    SELECT ${cols}
+      FROM invoices
+      ${whereSql}
+     ORDER BY created_at DESC
+     LIMIT ?
+  `;
+    params.push(limit);
+
+    return this.db.prepare(sql).all(...params) as any[];
+  }
+
+  getInvoiceStatusByHex(idHex: string): InvoiceStatus | undefined {
+    SqliteStore.assertHex64(idHex);
+    const row = this.db
+      .prepare(`SELECT status FROM invoices WHERE id_hex = ? LIMIT 1`)
+      .get(idHex) as { status: InvoiceStatus } | undefined;
+    return row?.status;
+  }
+
   // Webhooks
 
   insertWebhookAttempt(row: WebhookLogRow): string {
@@ -653,6 +694,13 @@ export class SqliteStore implements ISqliteStore {
       parts.push(`WHERE ${wheres.join(' AND ')}`);
     }
     parts.push(`ORDER BY created_at DESC`);
+
+    // ✅ Soft cap: only applied when env set. No signature change.
+    const limit = Number(process.env.POLLER_SELECT_ADMIN_LIMIT || 0);
+    if (Number.isFinite(limit) && limit > 0) {
+      parts.push(`LIMIT ${limit}`);
+    }
+
     const sql = parts.join(' ');
     return this.db.prepare(sql).all(...params) as InvoiceRow[];
   }

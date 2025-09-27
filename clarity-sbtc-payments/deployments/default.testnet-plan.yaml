@@ -16,10 +16,10 @@ plan:
             anchor-block-only: true
             clarity-version: 1
         - contract-publish:
-            contract-name: mock-sbtc-token
+            contract-name: sbtc-token
             expected-sender: ST2CF5DCN3AJXX2P948GFWGH0BNAVS0KT82YAK9DR
             cost: 31320
-            path: contracts/mock-sbtc-token.clar
+            path: contracts/sbtc-token.clar
             anchor-block-only: true
             clarity-version: 1
       epoch: "2.05"
