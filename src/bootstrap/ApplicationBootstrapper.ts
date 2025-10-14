@@ -281,10 +281,10 @@ export class ApplicationBootstrapper {
       builder,
       dispatcher: dispatcher as any,
       pollerBridge,
+      cfg: cfg as IConfigService,
     });
 
-    // inside ApplicationBootstrapper.boot(), after you construct `chain`, `builder`, `adminCtrl`, etc.
-    // In ApplicationBootstrapper.boot()
+
     if (process.env.AUTO_BOOTSTRAP_ADMIN === '1' && process.env.SIGNER_PRIVATE_KEY) {
       try {
         // 1) Admin

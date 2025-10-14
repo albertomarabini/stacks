@@ -1,5 +1,7 @@
 // src/contracts/interfaces.ts
 import type {
+  AnchorCase,
+  NetworkName,
   OnChainSubscription,
   UnsignedContractCall,
   WebhookEventType,
@@ -11,6 +13,7 @@ export interface IStacksChainClient {
   readSubscription(idHex: string): Promise<OnChainSubscription | undefined>;
   getTip(): Promise<{ height: number; blockHash: string }>;
   getTipHeight(): Promise<number>;
+  readInvoiceStatus(idHex: string): Promise<'not-found' | 'paid' | 'canceled' | 'expired' | 'unpaid'>;
   getFungibleBalance(
     assetContract: { contractAddress: string; contractName: string },
     principal: string,
@@ -19,6 +22,21 @@ export interface IStacksChainClient {
   getBlockHeader(
     height: number,
   ): Promise<{ parent_block_hash: string; block_hash: string }>;
+  signAndBroadcast(
+    unsigned: {
+      contractAddress: string;
+      contractName: string;
+      functionName: string;
+      functionArgs?: any[];
+      postConditions?: any[];
+      post_conditions?: any[];
+      postConditionMode?: 'allow' | 'deny';
+      post_condition_mode?: 'allow' | 'deny';
+      anchorMode?: AnchorCase;
+      network?: NetworkName;
+    },
+    senderKeyHex: string,
+  ): Promise<{ txid: string }>;
 }
 
 export interface IContractCallBuilder {
@@ -116,7 +134,10 @@ export interface IConfigService {
   };
   getAvgBlockSecs(): number;
   getPriceApiUrl(): string | undefined;
-  isAutoBroadcastEnabled(): boolean;
+  isAutoBroadcastOnChainEnabled(): boolean;
+  getServerSignerPrivKey(): string | undefined;
+  getAdminToken():string | undefined;
+  getHiroAPIKey():string | undefined;
 }
 
 export interface IWebhookDispatcher {

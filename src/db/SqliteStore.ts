@@ -48,7 +48,7 @@ export class SqliteStore implements ISqliteStore {
 
   findActiveByApiKey(apiKey: string): MerchantRow | undefined {
     const stmt = this.db.prepare(
-      `SELECT * FROM merchants WHERE api_key = ? AND active = 1 LIMIT 1`,
+      `SELECT * FROM merchants WHERE stx_private_key = ? AND active = 1 LIMIT 1`,
     );
     const row = stmt.get(apiKey) as MerchantRow | undefined;
     return row;
@@ -58,7 +58,7 @@ export class SqliteStore implements ISqliteStore {
     const stmt = this.db.prepare(`
       INSERT INTO merchants (
         id, principal, name, display_name, logo_url, brand_color,
-        webhook_url, hmac_secret, api_key, active, support_email,
+        webhook_url, hmac_secret, stx_private_key, active, support_email,
         support_url, allowed_origins, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -71,7 +71,7 @@ export class SqliteStore implements ISqliteStore {
       row.brand_color ?? null,
       row.webhook_url ?? null,
       row.hmac_secret,
-      row.api_key,
+      row.stx_private_key,
       row.active,
       row.support_email ?? null,
       row.support_url ?? null,
@@ -86,16 +86,13 @@ export class SqliteStore implements ISqliteStore {
     return info.changes;
   }
 
-  updateMerchantKeysTx(storeId: string, apiKey: string, hmacSecret: string): void {
-    const tx = this.db.transaction((id: string, k: string, secret: string) => {
+  updateStxPrivateKey(storeId: string, key: string): void {
       this.db
-        .prepare(`UPDATE merchants SET api_key = ?, hmac_secret = ? WHERE id = ?`)
-        .run(k, secret, id);
-    });
-    tx(storeId, apiKey, hmacSecret);
-  }
+        .prepare(`UPDATE merchants SET stx_private_key = ? WHERE id = ?`)
+        .run(key, storeId);
+    }
 
-  listMerchantsProjection(): Omit<MerchantRow, 'api_key' | 'hmac_secret'>[] {
+  listMerchantsProjection(): Omit<MerchantRow, 'stx_private_key' | 'hmac_secret'>[] {
     const sql = this.merchantProjection.getListProjectionSQL();
     const dbRows = this.db.prepare(sql).all() as any[];
     return dbRows.map((r) => this.merchantProjection.mapListRow(r));
@@ -116,6 +113,7 @@ export class SqliteStore implements ISqliteStore {
       | 'support_email'
       | 'support_url'
       | 'allowed_origins'
+      | 'principal'
     >>
   ): void {
     const allowed = [
@@ -127,6 +125,7 @@ export class SqliteStore implements ISqliteStore {
       'support_email',
       'support_url',
       'allowed_origins',
+      'principal'
     ] as const;
 
     const keys = allowed.filter(k => (patch as any)[k] !== undefined);
@@ -144,7 +143,7 @@ export class SqliteStore implements ISqliteStore {
   rotateKeysPersist(storeId: string, apiKey: string, hmacSecret: string, now = nowSec()): number {
     const update = this.db.prepare(`
       UPDATE merchants
-         SET api_key = ?,
+         SET stx_private_key = ?,
              hmac_secret = ?,
              keys_rotation_version = keys_rotation_version + 1,
              keys_last_rotated_at = ?,
@@ -394,6 +393,14 @@ export class SqliteStore implements ISqliteStore {
   }
 
   getActiveSubscription(id: string, storeId: string): SubscriptionRow | undefined {
+    const stmt = this.db.prepare(
+      `SELECT * FROM subscriptions WHERE id = ? AND store_id = ? AND active = 1 LIMIT 1`,
+    );
+    const row = stmt.get(id, storeId) as SubscriptionRow | undefined;
+    return row;
+  }
+
+  getActiveSubscriptions(id: string, storeId: string): SubscriptionRow | undefined {
     const stmt = this.db.prepare(
       `SELECT * FROM subscriptions WHERE id = ? AND store_id = ? AND active = 1 LIMIT 1`,
     );

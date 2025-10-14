@@ -4,17 +4,17 @@ import type { ISqliteStore } from '../contracts/dao';
 import type { NormalizedEvent } from '../contracts/domain';
 import { hexToCV, cvToJSON } from '@stacks/transactions';
 
-function cleanHex64(x?: string) {
-  return String(x ?? '').replace(/^0x/i, '').toLowerCase();
-}
-function toNumU(nLike: any) {
+// ─── helpers ─────────────────────────────────────────────────────────────────
+const cleanHex64 = (x?: string) => String(x ?? '').replace(/^0x/i, '').toLowerCase();
+const toNumU = (nLike: any) => {
   const s = String(nLike ?? '');
   return Number(s.startsWith('u') ? s.slice(1) : s);
-}
-function isContractLog(ev: any) {
+};
+const isContractLog = (ev: any) => {
   const t = ev?.event_type || ev?.eventType;
   return t === 'smart_contract_log' || t === 'contract_log';
-}
+};
+const short = (s: string, n = 120) => s.length > n ? `${s.slice(0, n)}…` : s;
 
 // Parse a contract_log `{ value: {hex, repr} }` into { tag, idHex, amountSats, ... }
 function parsePrint(ev: any) {
@@ -32,7 +32,7 @@ function parsePrint(ev: any) {
       let tuple = j;
       if (tuple?.type !== 'tuple' && tuple?.value?.type === 'tuple') tuple = tuple.value;
 
-      // Tuples from cvToJSON are arrays of { name, value, type }
+      // Tuples from cvToJSON can be arrays of { name, value, type }
       const fields: any[] = Array.isArray(tuple?.value) ? tuple.value : [];
       const get = (k: string) => fields.find((x: any) => x?.name === k)?.value;
 
@@ -44,11 +44,11 @@ function parsePrint(ev: any) {
       const idCV = get('id');
       const idHex = cleanHex64(String(idCV?.value ?? idCV ?? ''));
 
-      // Amount (uint) — tolerate bigint or "u…" strings
+      // Amount (uint)
       const amtCV = get('amount');
       const amountSats = toNumU(amtCV?.value ?? amtCV);
 
-      // Optionals we sometimes print with subscriptions
+      // Optionals
       const merchantVal = get('merchant');
       const merchant = String(merchantVal?.value ?? merchantVal ?? '') || undefined;
 
@@ -59,14 +59,14 @@ function parsePrint(ev: any) {
       const intervalBlocks = toNumU(intervalVal?.value ?? intervalVal);
 
       if (tag) {
-        return { tag, idHex, amountSats, merchant, subscriber, intervalBlocks };
+        return { tag, idHex, amountSats, merchant, subscriber, intervalBlocks, repr };
       }
     } catch {
       // fall through to repr parsing
     }
   }
 
-  // Fallback: look for “…invoice-refunded… 0x<64> … u<amt> …”
+  // Fallback: “…invoice-refunded… 0x<64> … u<amt> …”
   const m =
     /(invoice-(?:paid|refunded|canceled))(?:(?!\n).)*(0x[0-9a-fA-F]{64})?(?:(?!\n).)*u(\d+)/.exec(
       repr
@@ -76,97 +76,99 @@ function parsePrint(ev: any) {
       tag: m[1].toLowerCase(),
       idHex: cleanHex64(m[2] || ''),
       amountSats: Number(m[3] || '0'),
+      repr,
     };
   }
 
   const sm = /(subscription-(?:created|paid|canceled))/.exec(repr);
-  if (sm) return { tag: sm[1].toLowerCase() };
+  if (sm) return { tag: sm[1].toLowerCase(), repr };
 
   return null;
 }
 
-
+// ─── main ────────────────────────────────────────────────────────────────────
 export class ContractCallEventNormalizer {
   async fetchAndFilterEvents(fromHeight: number, chain: IStacksChainClient, store: ISqliteStore) {
     const events = await chain.getContractCallEvents({ fromHeight });
+
     const out: NormalizedEvent[] = [];
 
     for (const ev of events) {
-      if (!isContractLog(ev)) continue;
+      // gate 1: only contract logs
+      if (!isContractLog(ev)) {
+        console.debug('[EVT:NORM] skip:non-contract-log', {
+          tx_id: ev?.tx_id ?? ev?.txid,
+          event_type: ev?.event_type || ev?.eventType,
+        });
+        continue;
+      }
 
+      // gate 2: block height must be present
       const block_height = Number(ev?.block_height ?? ev?.tx?.block_height ?? NaN);
-      if (!Number.isFinite(block_height)) continue;
+      if (!Number.isFinite(block_height)) {
+        console.debug('[EVT:NORM] skip:no-block-height', {
+          tx_id: ev?.tx_id ?? ev?.txid,
+        });
+        continue;
+      }
+
       const tx_id: string = String(ev?.tx_id ?? ev?.txid ?? '');
       const tx_index: number = Number(ev?.tx_index ?? 0);
 
+      // parse the printed payload
       const p = parsePrint(ev);
-
-      // NEW: surface what we saw and why we skip
       if (!p) {
-        console.debug('[EVT:NORM] skip (parse=null)', { tx_id, block_height, tx_index });
+        const repr = String(ev?.contract_log?.value?.repr ?? '');
+        console.debug('[EVT:NORM] skip:parse-null', {
+          tx_id, block_height, tx_index, repr: short(repr),
+        });
         continue;
       }
-      console.debug('[EVT:NORM] parsed', { tag: p.tag, idHex: p.idHex, amountSats: p.amountSats, tx_id });
 
-      if (p.tag === 'invoice-paid') {
-        const idHex = cleanHex64(p.idHex);
-        if (idHex && store.invoiceExists(idHex)) {
-          out.push({ type: 'invoice-paid', idHex, block_height, tx_id, tx_index });
-          console.debug('[EVT:NORM] -> push invoice-paid', { idHex, tx_id });
-        } else {
-          console.debug('[EVT:NORM] drop paid (missing/unknown idHex)', { idHex, tx_id });
+      console.debug('[EVT:NORM] parsed', {
+        tag: p.tag, idHex: p.idHex, amountSats: p.amountSats, tx_id, block_height, tx_index,
+        repr: p.repr ? short(p.repr) : undefined,
+      });
+
+      // Map → NormalizedEvent
+      const tag = p.tag;
+      const idHex = cleanHex64(p.idHex);
+
+      const ensureKnownInvoice = () => {
+        if (!idHex) {
+          console.debug('[EVT:NORM] drop:empty-id', { tx_id, tag });
+          return false;
         }
-        continue;
-      }
-
-      if (p.tag === 'invoice-refunded') {
-        const idHex = cleanHex64(p.idHex);
-        if (idHex && store.invoiceExists(idHex)) {
-          const amt = Number(p.amountSats ?? 0);
-          out.push({ type: 'refund-invoice', idHex, amountSats: amt, block_height, tx_id, tx_index });
-          console.debug('[EVT:NORM] -> push refund-invoice', { idHex, amt, tx_id });
-        } else {
-          console.debug('[EVT:NORM] drop refund (missing/unknown idHex)', { idHex, tx_id });
+        if (!store.invoiceExists(idHex)) {
+          console.debug('[EVT:NORM] drop:unknown-invoice', { tx_id, tag, idHex });
+          return false;
         }
-        continue;
-      }
-      if (!p || !p.tag) continue;
+        return true;
+      };
 
-      // Map prints → NormalizedEvent(s), always use **amountSats**
-      if (p.tag === 'invoice-paid') {
-        const idHex = cleanHex64(p.idHex);
-        if (idHex && store.invoiceExists(idHex)) {
-          out.push({ type: 'invoice-paid', idHex, block_height, tx_id, tx_index });
-        }
+      if (tag === 'invoice-paid') {
+        if (!ensureKnownInvoice()) continue;
+        out.push({ type: 'invoice-paid', idHex, block_height, tx_id, tx_index });
+        console.debug('[EVT:NORM] push:invoice-paid', { idHex, tx_id });
         continue;
       }
 
-      if (p.tag === 'invoice-refunded') {
-        const idHex = cleanHex64(p.idHex);
-        if (idHex && store.invoiceExists(idHex)) {
-          out.push({
-            type: 'refund-invoice',
-            idHex,
-            amountSats: Number(p.amountSats ?? 0),
-            block_height,
-            tx_id,
-            tx_index,
-          });
-        }
+      if (tag === 'invoice-refunded') {
+        if (!ensureKnownInvoice()) continue;
+        const amt = Number(p.amountSats ?? 0);
+        out.push({ type: 'refund-invoice', idHex, amountSats: amt, block_height, tx_id, tx_index });
+        console.debug('[EVT:NORM] push:refund-invoice', { idHex, amountSats: amt, tx_id });
         continue;
       }
 
-      if (p.tag === 'invoice-canceled') {
-        const idHex = cleanHex64(p.idHex);
-        if (idHex && store.invoiceExists(idHex)) {
-          out.push({ type: 'invoice-canceled', idHex, block_height, tx_id, tx_index });
-        }
+      if (tag === 'invoice-canceled') {
+        if (!ensureKnownInvoice()) continue;
+        out.push({ type: 'invoice-canceled', idHex, block_height, tx_id, tx_index });
+        console.debug('[EVT:NORM] push:invoice-canceled', { idHex, tx_id });
         continue;
       }
 
-      if (p.tag === 'subscription-created') {
-        const idHex = cleanHex64(p.idHex);
-        if (!idHex) continue;
+      if (tag === 'subscription-created') {
         out.push({
           type: 'create-subscription',
           idHex,
@@ -178,25 +180,28 @@ export class ContractCallEventNormalizer {
           amountSats: Number(p.amountSats ?? 0),
           intervalBlocks: Number(p.intervalBlocks ?? 0),
         });
+        console.debug('[EVT:NORM] push:subscription-created', { idHex, tx_id });
         continue;
       }
 
-      if (p.tag === 'subscription-paid') {
-        const idHex = cleanHex64(p.idHex);
-        if (!idHex) continue;
+      if (tag === 'subscription-paid') {
         out.push({ type: 'pay-subscription', idHex, block_height, tx_id, tx_index });
+        console.debug('[EVT:NORM] push:subscription-paid', { idHex, tx_id });
         continue;
       }
 
-      if (p.tag === 'subscription-canceled') {
-        const idHex = cleanHex64(p.idHex);
-        if (!idHex) continue;
+      if (tag === 'subscription-canceled') {
         out.push({ type: 'cancel-subscription', idHex, block_height, tx_id, tx_index });
+        console.debug('[EVT:NORM] push:subscription-canceled', { idHex, tx_id });
         continue;
       }
+
+      // Unknown tag — show a crumb so you notice typos/schema drifts
+      console.debug('[EVT:NORM] skip:unknown-tag', { tag, tx_id, block_height, tx_index, repr: p.repr ? short(p.repr) : undefined });
     }
 
     out.sort((a, b) => (a.block_height - b.block_height) || (a.tx_index - b.tx_index));
+    console.debug('[EVT:NORM] done', { fromHeight, fetched: events.length, kept: out.length });
     return out;
   }
 }

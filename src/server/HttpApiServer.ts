@@ -190,6 +190,7 @@ export class HttpApiServer {
       (req, res) => deps.merchantCtrl.listWebhooks(req, res),
     );
 
+    // POC: make store profile publicly readable
     app.get(
       '/api/v1/stores/:storeId/profile',
       auth,
@@ -206,10 +207,18 @@ export class HttpApiServer {
     );
 
     app.post(
-      '/api/v1/stores/:storeId/rotate-keys',
+      '/api/v1/stores/:storeId/update-stx-key',
       auth,
       mask,
-      (req, res) => deps.merchantCtrl.rotateKeys(req, res),
+      (req, res) => deps.merchantCtrl.updateStxPrivateKey(req, res),
+    );
+
+    app.get(
+      '/api/v1/stores/:storeId/subscriptions',
+      auth,
+      mask,
+      express.json({ limit: JSON_LIMIT }),
+      (req, res) => deps.merchantCtrl.createSubscription(req, res),
     );
 
     app.post(
@@ -256,6 +265,16 @@ export class HttpApiServer {
     // Admin API
     const adminGuard = (req: any, res: any, next: any) =>
       deps.adminAuth.authenticateAdmin(req, res, next);
+
+    //-------------------------------------------------------------------------
+    // This is a patch created just for the POC. It should be engineered differently
+    //
+    //-------------------------------------------------------------------------
+    app.get(
+      '/api/admin/stores/:storeId/secret',
+      adminGuard,
+      (req, res) => deps.adminCtrl.getStoreSecret(req, res),
+    );
 
     app.post('/api/admin/bootstrap', adminGuard, (req, res) =>
       deps.adminCtrl.bootstrapAdmin(req, res)

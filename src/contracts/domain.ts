@@ -60,7 +60,7 @@ export interface MerchantRow {
   brand_color?: string;
   webhook_url?: string;
   hmac_secret: string;
-  api_key: string;
+  stx_private_key: string;
   active: number;              // 0/1
   support_email?: string;
   support_url?: string;
@@ -156,10 +156,10 @@ export interface StorePublicProfileDTO {
 export interface StorePrivateProfileDTO extends StorePublicProfileDTO {
   id: string;
   name?: string;
-  webhookUrl?: string;
   allowedOrigins: string[];
   principal: string;
   active: boolean;
+  
 }
 
 export interface AdminPollerStatusDTO {
@@ -269,3 +269,6 @@ export type InvoiceExpiredEvent = {
 export type InvoiceCanceledEvent = {
   invoiceId: string;
 };
+
+export type NetworkName = 'mainnet' | 'testnet' | 'devnet' | 'mocknet';
+export type AnchorCase = 'any' | 'on_chain_only' | 'off_chain_only' | 'onChainOnly' | 'offChainOnly';

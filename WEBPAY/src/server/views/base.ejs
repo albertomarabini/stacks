@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <% if (typeof csrfToken !== 'undefined' && csrfToken) { %>
+    <meta name="csrf-token" content="<%- csrfToken %>">
+  <% } %>
+  <title><%- (typeof title !== 'undefined' && title) ? title : ((branding && branding.displayName) || 'WEBPAY') %></title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <style>
+    :root { --brand: <%- (branding && branding.brandColor) ? branding.brandColor : '#111827' %>; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <!-- Optional: global brand bar -->
+  <div class="brandbar">
+    <a href="/" class="brandbrand">
+      <% if (branding && branding.logoUrl) { %>
+        <img src="<%- branding.logoUrl %>" width="25" height="25" alt="logo">
+      <% } %>
+      <span><%- (branding && branding.displayName) || 'Merchant' %></span>
+    </a>
+    <nav class="page-nav">
+      <a href="/" class="link">Home</a>
+    </nav>
+    <div class="brandspacer"></div>
+    <% if (branding && (branding.supportUrl || branding.supportEmail)) { %>
+      <a class="support" href="<%- branding.supportUrl || ('mailto:' + branding.supportEmail) %>">Support</a>
+    <% } %>
+  </div>
+
+  <main class="container">
+    <%- body %>
+  </main>
+
+  <footer class="site-footer">
+    <% if (branding && branding.supportUrl) { %><a href="<%- branding.supportUrl %>">Support</a><% } %>
+    <% if (branding && branding.supportEmail) { %><span class="ml-2"><%- branding.supportEmail %></span><% } %>
+  </footer>
+</body>
+</html>

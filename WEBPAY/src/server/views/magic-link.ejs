@@ -1,0 +1,37 @@
+<% layout('base') %>
+<section class="space-y-4">
+  <div id="magiclink-error" class="hidden rounded-2xl bg-red-50 text-red-700 p-3"></div>
+
+  <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
+    <h2 class="text-lg font-semibold">Pay <%= invoice.amountSats %> sats
+    <% if (invoice.usdAtCreate) { %>
+      <div class="text-sm text-gray-600">$<%- invoice.usdAtCreate %> (snapshot)</div>
+    <% } %>
+    </h2>
+    <p class="text-sm text-gray-600"><%- invoice.memo %></p>
+    <p id="countdown" class="mt-2 text-sm text-gray-600 hidden"></p>
+
+    <div class="mt-4 flex items-center gap-3">
+      <!-- Button is shown; the island will enable/disable it -->
+      <button id="open-wallet" class="bg-[color:var(--brand)] text-white rounded-2xl px-4 py-2">Open wallet</button>
+      <button id="copy-link" class="rounded-2xl px-4 py-2 ring-1 ring-black/10">Copy Link</button>
+    </div>
+    <canvas id="qr" class="mt-4 hidden"></canvas>
+
+    <p id="magiclink-confirm" class="mt-4 text-green-700 hidden">
+      Broadcasted. txid = <span id="txid" class="font-mono"></span>
+    </p>
+  </div>
+
+  <div id="status-strip"
+    class="status-strip px-2 py-1 rounded border text-sm font-medium bg-yellow-50 text-yellow-800 border-yellow-200">
+    Awaiting payment
+  </div>
+</section>
+
+<script id="__PAGE__DATA" type="application/json"><%- JSON.stringify(hydration || {}) %></script>
+<script>window.__PAGE__ = JSON.parse(document.getElementById('__PAGE__DATA')?.textContent || '{}');</script>
+
+<script type="module" src="/static/js/MagicLinkIsland.js"></script>
+<script type="module" src="/static/js/StatusStripIsland.js"></script>
+<script type="module" src="/static/js/EnvBandIsland.js"></script>

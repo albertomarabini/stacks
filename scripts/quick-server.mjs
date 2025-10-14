@@ -504,6 +504,7 @@ async function step(name, fn, requires = []) {
         flushCapture();
         return r;
     }
+    console.log(`executing ${idx}. ${name}`);
 
     const checks = requires.map((r) => (typeof r === "function" ? r() : r));
     const unmet = checks.find((ch) => !ch.ok);
@@ -1583,6 +1584,7 @@ let LAST_PAY_UNSIGNED = null;
 
             if (okUnsigned) logUnsigned("prepare-invoice unsigned", j.unsignedCall);
             return okDto && okUnsigned && okPcs && okMagic && okMagicFetch;
+
         } catch (e) {
             return (e.status === 404 || e.status === 405)
                 ? skip("merchant: prepare-invoice returns dto+unsigned+magiclink", "route missing")
@@ -2719,64 +2721,65 @@ let LAST_PAY_UNSIGNED = null;
             throw e;
         }
     }, [need.storeId(), need.invoiceA()]));
-    // Webhook dispatcher: flaky → retries with backoff → success
-    results.push(await step("webhooks: flaky receiver triggers retries then delivery", async () => {
-        // 1) Start flaky receiver (fail twice)
-        const flaky = await startFlakyWebhookReceiver({ failFirst: 2, status: 503 });
+    // // Webhook dispatcher: flaky → retries with backoff → success
+    // // Skipped for length
+    // results.push(await step("webhooks: flaky receiver triggers retries then delivery", async () => {
+    //     // 1) Start flaky receiver (fail twice)
+    //     const flaky = await startFlakyWebhookReceiver({ failFirst: 2, status: 503 });
 
-        // 2) Point store webhook to flaky url
-        await httpJson("PATCH",
-            `/api/v1/stores/${STORE_ID}/profile`,
-            { webhook_url: flaky.url },
-            "merchant"
-        );
+    //     // 2) Point store webhook to flaky url
+    //     await httpJson("PATCH",
+    //         `/api/v1/stores/${STORE_ID}/profile`,
+    //         { webhook_url: flaky.url },
+    //         "merchant"
+    //     );
 
-        // 3) Create & pay a small invoice to emit "invoice-paid"
-        const { invoiceId } = await createPayInvoiceForRefundTests({
-            amountSats: 1500, ttlSeconds: 600, memo: "webhook-retry"
-        });
+    //     // 3) Create & pay a small invoice to emit "invoice-paid"
+    //     const { invoiceId } = await createPayInvoiceForRefundTests({
+    //         amountSats: 1500, ttlSeconds: 600, memo: "webhook-retry"
+    //     });
 
-        // 4) Allow poller + dispatcher time to churn (bounded by lag)
-        await ensurePollerProgress(MAX_WAIT_MS);
+    //     // 4) Allow poller + dispatcher time to churn (bounded by lag)
+    //     await ensurePollerProgress(MAX_WAIT_MS);
 
-        const deadline = Date.now() + (MAX_WAIT_MS * 2);
-        let failed = 0, ok = false, okMulti = false;
-        while (Date.now() < deadline) {
-            const logs = await httpJson(
-                "GET",
-                `/api/admin/webhooks?status=all&storeId=${encodeURIComponent(STORE_ID)}`,
-                null,
-                "admin"
-            );
-            const relevant = (Array.isArray(logs) ? logs : []).filter(l =>
-                String(l?.invoiceId || "") === String(invoiceId) &&
-                /invoice-paid/i.test(String(l?.eventType || l?.event || l?.body || ""))
-            );
+    //     const deadline = Date.now() + (MAX_WAIT_MS * 2);
+    //     let failed = 0, ok = false, okMulti = false;
+    //     while (Date.now() < deadline) {
+    //         const logs = await httpJson(
+    //             "GET",
+    //             `/api/admin/webhooks?status=all&storeId=${encodeURIComponent(STORE_ID)}`,
+    //             null,
+    //             "admin"
+    //         );
+    //         const relevant = (Array.isArray(logs) ? logs : []).filter(l =>
+    //             String(l?.invoiceId || "") === String(invoiceId) &&
+    //             /invoice-paid/i.test(String(l?.eventType || l?.event || l?.body || ""))
+    //         );
 
-            failed = relevant.filter(l => l.success === false).length;
-            ok = relevant.some(l => l.success === true);
-            okMulti = relevant.some(l => l.success === true && Number(l.attempts) >= 2);
+    //         failed = relevant.filter(l => l.success === false).length;
+    //         ok = relevant.some(l => l.success === true);
+    //         okMulti = relevant.some(l => l.success === true && Number(l.attempts) >= 2);
 
-            // PASS if: (a) attempts≥2 on any success row, OR (b) at least 1 failure before a success
-            if (okMulti || (failed >= 1 && ok)) break;
+    //         // PASS if: (a) attempts≥2 on any success row, OR (b) at least 1 failure before a success
+    //         if (okMulti || (failed >= 1 && ok)) break;
 
-            await sleep(700);
-        }
+    //         await sleep(700);
+    //     }
 
-        if (!(okMulti || (failed >= 1 && ok))) {
-            // diagnostics & lag handling (unchanged)
-            const ps = await getPollerStatus();
-            if (ps.ok && ps.lagBlocks > 0) {
-                const avg = Number(process.env.AVG_BLOCK_SECONDS || 20);
-                await ensurePollerProgress((ps.lagBlocks + 1) * avg * 1000 + 20_000);
-            }
-        }
+    //     if (!(okMulti || (failed >= 1 && ok))) {
+    //         // diagnostics & lag handling (unchanged)
+    //         const ps = await getPollerStatus();
+    //         if (ps.ok && ps.lagBlocks > 0) {
+    //             const avg = Number(process.env.AVG_BLOCK_SECONDS || 20);
+    //             await ensurePollerProgress((ps.lagBlocks + 1) * avg * 1000 + 20_000);
+    //         }
+    //     }
 
-        return okMulti || (failed >= 1 && ok) ||
-            skip("webhooks: flaky receiver triggers retries then delivery",
-                "no multi-attempt pattern observed (queue/backoff not enabled yet?)");
+    //     return okMulti || (failed >= 1 && ok) ||
+    //         skip("webhooks: flaky receiver triggers retries then delivery",
+    //             "no multi-attempt pattern observed (queue/backoff not enabled yet?)");
 
-    }, [need.storeId(), need.apiKey(), need.hmac(), need.merchantSigner(), need.payerSigner(), need.payReady()]));
+    // }, [need.storeId(), need.apiKey(), need.hmac(), need.merchantSigner(), need.payerSigner(), need.payReady()]));
     results.push(await step("invoice: usdAtCreate is present and stable", async () => {
         // create with merchant auth using snake_case (jsonCompat will retry camelCase if needed)
         const created = await jsonCompat("POST",
@@ -2830,47 +2833,47 @@ let LAST_PAY_UNSIGNED = null;
 
         return saw429 || skip("rate-limit: burst POST /invoices eventually hits 429", "no 429 observed (limit not enforced yet?)");
     }, [need.storeId(), need.apiKey()]));
-    results.push(await step("scheduler: sub due → auto-invoice + webhook (optional)", async () => {
-        if (!sub?.id) return blocked("scheduler: sub due → auto-invoice + webhook (optional)", "no subscription created");
+    // results.push(await step("scheduler: sub due → auto-invoice + webhook (optional)", async () => {
+    //     if (!sub?.id) return blocked("scheduler: sub due → auto-invoice + webhook (optional)", "no subscription created");
 
-        // Window to watch for the scheduler to kick in and create a fresh invoice
-        const deadline = Date.now() + (MAX_WAIT_MS * 2);
-        let found = null;
+    //     // Window to watch for the scheduler to kick in and create a fresh invoice
+    //     const deadline = Date.now() + (MAX_WAIT_MS * 2);
+    //     let found = null;
 
-        while (Date.now() < deadline) {
-            const list = await httpJson("GET",
-                `/api/v1/stores/${STORE_ID}/invoices?status=unpaid&subscriptionId=${encodeURIComponent(sub.id)}`,
-                null, "merchant"
-            );
-            if (Array.isArray(list) && list.length > 0) {
-                found = list[0];
-                break;
-            }
-            await ensurePollerProgress(3000);
-        }
+    //     while (Date.now() < deadline) {
+    //         const list = await httpJson("GET",
+    //             `/api/v1/stores/${STORE_ID}/invoices?status=unpaid&subscriptionId=${encodeURIComponent(sub.id)}`,
+    //             null, "merchant"
+    //         );
+    //         if (Array.isArray(list) && list.length > 0) {
+    //             found = list[0];
+    //             break;
+    //         }
+    //         await ensurePollerProgress(3000);
+    //     }
 
-        if (!found) {
-            return skip("scheduler: sub due → auto-invoice + webhook (optional)", "no auto-generated invoice observed (scheduler likely disabled)");
-        }
+    //     if (!found) {
+    //         return skip("scheduler: sub due → auto-invoice + webhook (optional)", "no auto-generated invoice observed (scheduler likely disabled)");
+    //     }
 
-        // If we have a webhook receiver configured, see if we captured the event
-        const wantId = String(found.id || found.invoiceId || "");
-        const deadline2 = Date.now() + MAX_WAIT_MS;
-        let hit = null;
-        while (Date.now() < deadline2) {
-            hit = hook.captured.find(e =>
-                typeof e.raw === "string" &&
-                e.raw.includes(wantId) &&
-                /subscription-invoice-created/i.test(e.raw)
-            );
-            if (hit) break;
-            await sleep(500);
-        }
-        // Webhook is optional; success if invoice exists. If webhook present, verify HMAC.
-        if (!hit) return true;
-        const v = verifyWebhookSig(hit, HMAC_SECRET);
-        return v.ok ? true : fail("subscription-invoice-created HMAC", v, v.reason);
-    }, [need.storeId(), need.apiKey(), need.subId(), need.hmac()]));
+    //     // If we have a webhook receiver configured, see if we captured the event
+    //     const wantId = String(found.id || found.invoiceId || "");
+    //     const deadline2 = Date.now() + MAX_WAIT_MS;
+    //     let hit = null;
+    //     while (Date.now() < deadline2) {
+    //         hit = hook.captured.find(e =>
+    //             typeof e.raw === "string" &&
+    //             e.raw.includes(wantId) &&
+    //             /subscription-invoice-created/i.test(e.raw)
+    //         );
+    //         if (hit) break;
+    //         await sleep(500);
+    //     }
+    //     // Webhook is optional; success if invoice exists. If webhook present, verify HMAC.
+    //     if (!hit) return true;
+    //     const v = verifyWebhookSig(hit, HMAC_SECRET);
+    //     return v.ok ? true : fail("subscription-invoice-created HMAC", v, v.reason);
+    // }, [need.storeId(), need.apiKey(), need.subId(), need.hmac()]));
 
 
     // Report

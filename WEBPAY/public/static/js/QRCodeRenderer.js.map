@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/client/islands/helpers/QRCodeRenderer.ts"],
+  "sourcesContent": ["export class QRCodeRenderer {\n  static draw(canvas: HTMLCanvasElement, link: string): void {\n    // No defensive: let this fail loudly if misused.\n    const ctx = canvas.getContext('2d');\n    ctx && (ctx.clearRect(0, 0, canvas.width, canvas.height));\n    (window as any).QRCode.toCanvas(\n      canvas,\n      link,\n      { width: 256, margin: 1 },\n      () => {}\n    );\n  }\n}\n"],
+  "mappings": ";AAAO,IAAM,iBAAN,MAAqB;AAAA,EAC1B,OAAO,KAAK,QAA2B,MAAoB;AAEzD,UAAM,MAAM,OAAO,WAAW,IAAI;AAClC,WAAQ,IAAI,UAAU,GAAG,GAAG,OAAO,OAAO,OAAO,MAAM;AACvD,IAAC,OAAe,OAAO;AAAA,MACrB;AAAA,MACA;AAAA,MACA,EAAE,OAAO,KAAK,QAAQ,EAAE;AAAA,MACxB,MAAM;AAAA,MAAC;AAAA,IACT;AAAA,EACF;AACF;",
+  "names": []
+}

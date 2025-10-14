@@ -19,6 +19,9 @@ export function loadEnvSnapshot(): IConfigSnapshot {
     reorgWindowBlocks: Number(process.env.REORG_WINDOW_BLOCKS ?? 6),
     pollIntervalSecs: Number(process.env.POLL_INTERVAL_SECS ?? 30),
     priceApiUrl: process.env.PRICE_API_URL ? String(process.env.PRICE_API_URL) : undefined,
-    autoBroadcast: String(process.env.AUTO_BOOTSTRAP_ADMIN ?? '1') === 'true',
+    autoBroadcastOnChain: String(process.env.AUTO_BROADCAST_ONCHAIN ?? '1') === '1',
+    serverSignerPrivKey:process.env.SIGNER_PRIVATE_KEY?String(process.env.SIGNER_PRIVATE_KEY):undefined,
+    adminToken:process.env.ADMIN_TOKEN?String(process.env.ADMIN_TOKEN):undefined,
+    HiroAPIKey:process.env.HIRO_API_KEY?String(process.env.HIRO_API_KEY):undefined,
   });
 }

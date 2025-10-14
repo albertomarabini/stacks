@@ -9,62 +9,180 @@
 (4) create subscriptions
 
 ---
-## Introduction and cornerstones
-WEBPAY is A hosted checkout for sBTC.
-Merchants redirect, show a POS QR, email an invoice, or bill a subscription; customers click a magic-link that opens their wallet to send exactly the right amount with strong safety checks.
+# WEBPAY — sBTC Payments Hub (POC)
 
-### Tech stack
+## Architecture & Responsibility Split
 
-* **Runtime**: Node 20+, **TypeScript** everywhere.
-* **Web framework**: **Express** (+ server-rendered pages) for max control
-* **Styling**: Tailwind (keeps UI fast to ship).
-* **State/query**: fetch-based; no client state libs needed.
-* **Email (Postmark)**: body contains the **magic-link**.
+### Core principles (musts)
+
+1. **Secrets never leave the server.** `X-API-Key` and `hmacSecret` exist only on the WEBPAY server; the browser never calls Bridge mutating endpoints.
+2. **One owner per concern.** A function either touches the DOM **or** Express/Bridge—never both.
+3. **Two build targets.**
+
+   * `server/` → Node/Express bundle.
+   * `client/` → Browser bundle.
+     Cross-imports between these roots are forbidden by lint/CI.
+4. **Public reads are okay from the browser.** Only `GET /i/:invoiceId` and other explicitly whitelisted *public* Bridge reads are called directly from pages.
+5. **Magic-link page never builds transactions.** It validates `u` and calls the wallet via Connect. No `/create-tx` here.
+
+---
+
+## Components & responsibilities
+
+| Component                   | Runs        | Responsibilities                                                                                   | May call                                                    |
+| --------------------------- | ----------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **WEBPAY Server (Express)** | Node        | Render pages, verify `u`, proxy *mutating* actions to Bridge with `X-API-Key`, session/auth, email | **Bridge API** (server→server), Postmark                    |
+| **Browser UI (Client)**     | Browser     | DOM, toasts, modals, QR, *public* polling, submits to **WEBPAY** endpoints only                    | **WEBPAY** routes, `GET /i/:invoiceId` (public Bridge read) |
+| **Bridge** (already built)  | Node        | Persistence, unsigned call builders, `u` mint, webhooks, pollers                                   | Stacks RPC/API                                              |
+| **Wallet (Connect)**        | User device | Signs/broadcasts                                                                                   | Stacks RPC via wallet                                       |
+
+---
+
+## Routing contract (clear boundaries)
+
+### Public pages (served by WEBPAY)
+
+* `GET /w/:storeId/:invoiceId?u=...` — **Magic-link** page.
+
+  * **Server**: verify `u` (HMAC, expiry, invariants, network) before rendering.
+  * **Client**: minimal module: re-check `u` (defense-in-depth) → `request('stx_callContract', …)`. No server fetches.
+* `GET /s/:storeId/:subscriptionId[/*]` — Subscription pay/manage pages.
+
+  * Same validation rules as magic-link.
+
+### Merchant/Admin UI (served by WEBPAY)
+
+* Pages: `GET /merchant/:storeId`, `GET /admin`
+* **Client → Server** (WEBPAY-owned endpoints; never directly Bridge):
+
+  * `POST /merchant/:storeId/invoices/prepare` → WEBPAY → Bridge `/api/v1/stores/:storeId/prepare-invoice`
+  * `POST /merchant/:storeId/invoices/:invoiceId/cancel` → WEBPAY → Bridge …
+  * `POST /merchant/:storeId/refunds/create-tx` → WEBPAY → Bridge …
+  * `GET  /merchant/:storeId/invoices?...` → WEBPAY → Bridge …
+  * `POST /merchant/:storeId/invoices/:invoiceId/send-email` → WEBPAY (email via Postmark)
+
+> **Rule:** Any route that mutates state or requires secrets is **Client → WEBPAY → Bridge**.
+
+---
+
+## Interfaces & payloads
+
+### Server ↔ Bridge (internal)
+
+* Reuse your existing Bridge endpoints exactly; WEBPAY injects `X-API-Key`.
+* WEBPAY caches per-store `X-API-Key` & `hmacSecret`.
+
+### Client ↔ WEBPAY (external)
+
+* **Prepare invoice (merchant console & POS)**
+
+  * `POST /merchant/:storeId/invoices/prepare`
+  * Body: `{ amount_sats, ttl_seconds, memo, orderId?, payerPrincipal? }`
+  * Response: `{ invoice, magicLink }` *(optionally include `unsignedCall` for debug only; not required by client)*
+* **Cancel invoice**
+
+  * `POST /merchant/:storeId/invoices/:invoiceId/cancel`
+* **Refund create-tx**
+
+  * `POST /merchant/:storeId/refunds/create-tx` `{ invoiceId, amount_sats, memo }`
+* **Send email**
+
+  * `POST /merchant/:storeId/invoices/:invoiceId/send-email` `{ recipientEmail? }`
+
+---
+
+## Rendering strategy
+
+* **Static + progressive enhancement where possible**
+
+  * Server renders basic HTML (SSR) with data placeholders.
+  * Client JS attaches behavior (copy link, open QR, paginate, poll).
+* **Magic-link**: render a tiny static page + one ES module. No server calls after first paint (except polling `/i/:invoiceId` for status display).
+* **No hybrid classes.**
+
+  * **Server** files may use `req/res`, `BridgeClient`.
+  * **Client** files may use `document`, `window`, UI renderers.
+  * Shared types live in `/contracts`.
+
+---
+
+## Security rules (enforced & testable)
+
+* **Never** expose `X-API-Key`/`hmacSecret` to the browser (lint rule forbids importing `server/services/bridge-client` from `client/`).
+* WEBPAY **verifies `u`** server-side before serving `/w/...` or `/s/...`:
+
+  * HMAC (constant-time compare), `exp`, path invariants, `postConditionMode:'deny'`, FT post-condition for sBTC, network matches deployment.
+  * On failure: 4xx + error page; **do not** ship the wallet opener script.
+* **Client-side guard** mirrors minimal checks (decode/expiry/PC presence) before `request('stx_callContract', …)`.
+* All **mutations** (`prepare-invoice`, `cancel`, `refund`, `rotate-keys`, subscriptions CRUD) are **server-only** calls to Bridge.
+
+---
+
+## Folder layout (enforced by tooling)
+
 ```
-  body: JSON.stringify({
-    From: `billing@${SENDER_DOMAIN}`,
-    To: recipientEmail,
-    Subject: `${brand.displayName} — Invoice for ${invoice.amountSats} sats`,
-    HtmlBody: renderInvoiceEmail({ brand, invoice, magicLink }),
-    TextBody: renderInvoiceEmailText({ brand, invoice, magicLink }),
-    MessageStream: 'outbound'
-  })
+/contracts/                # shared types only (no DOM/Express)
+  dto.ts
+  unsigned-call.ts
+
+/server/
+  controllers/             # Express route handlers (no DOM)
+    merchant.controller.ts
+    magic-link.controller.ts
+  services/
+    bridge-client.ts       # adds X-API-Key header
+    emailer.ts             # Postmark
+  views/                   # SSR templates/partials
+
+/client/
+  merchant/
+    MerchantConsoleClient.ts  # DOM-only
+    ApiClient.ts              # calls /merchant/* (WEBPAY)
+    ui/*                      # renderers/modals
+  magic-link/
+    open-wallet.ts            # Connect call & local checks
 ```
-* **Secrets**: `.env` .
 
-### UI surfaces (just enough to ship)
+**CI guardrails**
 
-* **Magic-link / Checkout page**: minimal status, amount, timer, **Open wallet** button fallback, QR (same link), polling strip.
-* **POS**: amount input → Create → big QR, timer, status dots → Paid ✓ → New sale.
-* **Merchant console**
-  * Invoices: Create modal → success sheet (Copy Link, Email, Show QR), ledger table with state-driven actions (Cancel, Refund, View Tx).
-  * Subscriptions: Create, list, “Generate invoice now”, Cancel; details drawer shows history/next due.
-  * Branding settings, Webhook deliveries (read-only log).
+* ESLint rules:
 
-* **Admin console**
-  * Stores CRUD, Activate/Deactivate, Rotate keys (one-time reveal), Set sBTC token, Poller status/logs, Retry webhook.
+  * `no-restricted-imports`: `client/*` cannot import from `server/*` and vice versa.
+  * Ban `document`/`window` in `/server`; ban `req`/`res` in `/client`.
+* Build fails if violated.
+
+---
+
+## Do/Don’t examples
+
+* **Do (client)**
+  `POST /merchant/:storeId/invoices/prepare` → updates DOM with `{ magicLink }`.
+* **Don’t (client)**
+  `POST /api/v1/stores/:storeId/prepare-invoice` (Bridge) — **forbidden** in browser.
+* **Do (server)**
+  `bridgeClient.prepareInvoice(storeId, payload)` with `X-API-Key`.
+* **Don’t (server)**
+  Touch `document` or instantiate UI renderers.
+
+---
+
+## Acceptance criteria (boundary-focused)
+
+1. Opening `/w/:storeId/:invoiceId?u=...` with a tampered or expired `u` returns an error page; the wallet script is not present in HTML.
+2. Browser DevTools never shows `X-API-Key` or Bridge host in any **mutating** request.
+3. A grep for `fetch("/api/v1/` under `/client` returns **zero** matches (except `GET /i/:invoiceId`).
+4. Lint rule blocks any `document` usage under `/server` and any `req|res` under `/client`.
+5. The POS screen shows a QR of **`magicLink`** only; scanning it always lands on the WEBPAY magic-link page that calls Connect.
+
+* Keep pages as server-rendered HTML with tiny islands of JS (no SPA).
+* Use **htmx**/progressive enhancement *or* plain fetch + `innerHTML` swaps (already in your code) but always via **WEBPAY** endpoints.
+* Treat the Merchant/Admin areas as classic form-post or partial-render pages; reserve JS for modals and polling.
+* The only “dynamic” client logic that must remain is the Connect wallet opener on magic-link pages and the invoice status poller.
+
+---
 
 
-### System components & responsibility split
-
-* **Merchant site/app (your ecommerce, redirect-only): never talks to Bridge; no signing keys.**
-  Triggers payment by **redirecting the shopper to WEBPAY** with minimal order parameters. Holds no signing keys; never talks to the Bridge directly in redirect flows.
-
-* **WEBPAY (hosted web)**
-  serves all public pages (checkout, magic-link, POS, subscription); calls the **Bridge** server-to-server with the store **API key**; verifies `u` on magic-link pages.
-
-* **Node.js Bridge (to Clarity)**
-  owns **all** invoice/subscription persistence, unsigned-call building, **`u` minting (HMAC)**, pollers, and webhooks; exposes the **Bridge API** (`/api/admin/...`, `/api/v1/...`, `/i/:invoiceId`, `/create-tx`).
-** THE BRIDGE HAS BEEN ALREADY IMPLEMENTED: DOES NOT NEED ANY FURTHER WORK. IS REFERENCED HERE JUST FOR INTERFACEMENT**
-
-* **Wallet (Stacks Connect)**
-  Signs/broadcasts `stx_callContract`. Must be called with `postConditionMode: 'deny'` and sBTC **FT post-condition** on the payer. &#x20;
-** THE WALLET IS ANY SBTC COMPATIBLE WALLET SUCH AS LEATHER**
-
-* **Stacks infra (RPC/Blockchain API)** for fee/nonce and reads:
-  `GET /v2/accounts/{principal}`, `POST /v2/fees/transaction`, `POST /v2/transactions` (broadcast). &#x20;
-
-> sBTC is a **SIP-010 fungible token**; enforce “willSendEq amountSats” via FT post-condition + **Deny** mode. Post-conditions assert what the **payer sends**, not the recipient. &#x20;
+# Architectural Staples:
 
 
 ### 1) The *magic‑link*

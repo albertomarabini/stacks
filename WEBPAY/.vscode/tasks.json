@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "watch:client",
+        "type": "shell",
+        "command": "node scripts/build-client.mjs --watch",
+        "isBackground": true,
+        "problemMatcher": {
+          "owner": "esbuild-watch",
+          "pattern": [
+            {
+              "regexp": ".*",
+              "file": 1,
+              "line": 2,
+              "message": 0
+            }
+          ],
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^\\[islands\\] watching",
+            "endsPattern": "^\\[islands\\] ✅ build succeeded"
+          }
+        },
+        "presentation": {
+          "reveal": "silent"
+        }
+      }
+    ]
+  }

@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title><%= (branding && branding.displayName) || 'Admin' %> • Token Config</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <% if (brandCssStyle) { %><%- brandCssStyle %><% } %>
+  <style>
+    .card{background:#fff;border-radius:1rem;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    .btn{display:inline-block;padding:.6rem .9rem;border-radius:.6rem;background:var(--brand,#111827);color:#fff;border:0;cursor:pointer}
+    .btn:hover{filter:brightness(1.05)}
+    .field{margin-bottom:.75rem}
+    .field label{display:block;font-size:.9rem;color:#6b7280}
+    .field input{width:100%;padding:.55rem .65rem;border:1px solid #e5e7eb;border-radius:.5rem}
+    .muted{color:#6b7280}
+    .info{margin-top:1.25rem;padding:1rem;border:1px solid #e5e7eb;border-radius:.75rem;background:#f9fafb}
+    .info h2{margin:0 0 .5rem 0;font-size:1rem;font-weight:600}
+    .info p{margin:.25rem 0}
+    .note{font-size:.875rem;color:#374151}
+    .list{margin:.25rem 0 .25rem 1rem; padding-left:1rem; list-style:disc}
+    pre{white-space:pre-wrap;word-break:break-word}
+  </style>
+</head>
+<body class="bg-gray-50">
+  <%- include('./_brandbar', { branding }) %>
+  <main style="max-width:720px;margin:3rem auto;padding:2rem" class="card">
+    <h1 class="text-2xl font-semibold mb-4">sBTC Token Config</h1>
+
+    <% const hasUnsigned = (typeof unsignedCall !== 'undefined' && unsignedCall); %>
+    <% if (hasUnsigned) { %>
+      <p class="mb-2">Unsigned call ready. Broadcast with your admin signer.</p>
+      <pre class="bg-gray-100 p-3 rounded"><%= JSON.stringify(unsignedCall, null, 2) %></pre>
+    <% } else { %>
+      <p class="muted">Submit <code>contractAddress</code> and <code>contractName</code> to generate the unsigned call.</p>
+    <% } %>
+
+    <!-- Config form -->
+    <form method="post" action="/admin/token" style="margin-top:1rem">
+      <% if (typeof csrfToken === 'string') { %>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <% } %>
+
+      <div class="field">
+        <label for="contractAddress">Contract Address</label>
+        <input id="contractAddress" name="contractAddress" type="text" placeholder="ST1PQH…ZGGM" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="contractName">Contract Name</label>
+        <input id="contractName" name="contractName" type="text" placeholder="sbtc-token" autocomplete="off" />
+      </div>
+
+      <button class="btn" type="submit">Generate unsigned call</button>
+    </form>
+
+    <!-- Friendly explanation for non-technical admins -->
+    <section class="info">
+      <h2>About this setup</h2>
+      <p class="note"><strong>What these fields do:</strong> They tell the payment system which on-chain token is the official <em>sBTC</em>. Future invoices, refunds, and subscriptions use this token.</p>
+
+      <p class="note"><strong>When to set them:</strong> Usually once per blockchain environment (devnet/testnet/mainnet). After you broadcast the unsigned call, the setting is saved on-chain.</p>
+
+      <p class="note"><strong>How to get the values:</strong></p>
+      <ul class="list note">
+        <li><strong>Contract Address</strong> — the address where your sBTC token contract was deployed (e.g. <code>ST…</code>).</li>
+        <li><strong>Contract Name</strong> — the name of that contract (e.g. <code>sbtc-token</code>).</li>
+      </ul>
+      <p class="note">Your devops/deployment team provides these (or your deployment plan/docs list them).</p>
+
+      <p class="note"><strong>When you might need to set them again:</strong></p>
+      <ul class="list note">
+        <li>If you switch to a different network (e.g. move from devnet to testnet/mainnet) or reset devnet.</li>
+        <li>If the sBTC token contract is redeployed at a new address/name.</li>
+        <li>If the payment contract is redeployed/reset.</li>
+      </ul>
+      <p class="note">You <em>do not</em> need to redo this for normal app restarts.</p>
+    </section>
+  </main>
+
+  <%- (typeof hydrationScript === 'string' ? hydrationScript : '') %>
+</body>
+</html>

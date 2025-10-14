@@ -22,5 +22,8 @@ export interface IConfigSnapshot {
   reorgWindowBlocks: number;
   pollIntervalSecs: number;
   priceApiUrl?: string;
-  autoBroadcast: boolean;
+  autoBroadcastOnChain: boolean;
+  serverSignerPrivKey:string | undefined;
+  adminToken:string | undefined;
+  HiroAPIKey:string | undefined;
 }

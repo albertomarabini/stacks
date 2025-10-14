@@ -1,3 +1,10 @@
 /.env.example
 /.vscode
+*.zip
+
+/webpay/result_files_27-09-25-06_02_17.zip
 /result_files_24-08-25-08_05_05_original.zip
+/result_files_24-08-25-08_05_05.zip
+/--trash--
+
+/WEBPAY/dist

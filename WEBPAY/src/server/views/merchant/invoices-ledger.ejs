@@ -1,0 +1,115 @@
+<% layout('layout-merchant') %>
+
+    <!-- Robust storeId resolution (prevents ReferenceError in EJS): // 1) explicit render arg "storeId" // 2)
+        locals.storeId (if framework put it there) // 3) session-bound id if the app injects it into locals (optional,
+        will be '' ) -->
+      <%
+        const __storeId =
+          (typeof storeId === 'string' && storeId) ? storeId :
+          (typeof locals !== 'undefined' && typeof locals.storeId === 'string' && locals.storeId) ? locals.storeId : '';
+      %>
+
+        <section class="max-w-6xl mx-auto">
+            <h1 class="page-h1" style="color: var(--brand)">Invoices</h1>
+
+            <!-- Filter form (STATUS ONLY) -->
+            <form id="invoice-filter-form" class="card grid sm:grid-cols-3 gap-3 items-end"
+                action="/merchant/<%- __storeId %>/invoices/filter" method="POST">
+                <% if (typeof csrfToken==='string' ) { %>
+                    <input type="hidden" name="_csrf" value="<%- csrfToken %>" />
+                    <% } %>
+
+                        <div class="field sm:col-span-2">
+                            <label class="label">Status</label>
+                            <select name="status" class="input">
+                                <option value="">Any</option>
+                                <option value="unpaid">unpaid</option>
+                                <option value="paid">paid</option>
+                                <option value="expired">expired</option>
+                                <option value="canceled">canceled</option>
+                                <option value="refunded">refunded</option>
+                                <option value="partially_refunded">partially_refunded</option>
+                            </select>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button class="btn" type="submit">Apply</button>
+                        </div>
+            </form>
+
+            <!-- Results -->
+            <div id="ledger-results" class="mt-4">
+                <% if (!Array.isArray(list) || list.length===0) { %>
+                    <div class="card text-muted">No results</div>
+                    <% } else { %>
+                        <div class="overflow-x-auto card p-0">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="th">Invoice</th>
+                                        <th class="th">Amount (sats)</th>
+                                        <th class="th">Status</th>
+                                        <th class="th">Payer</th>
+                                        <th class="th">Memo</th>
+                                        <th class="th">Created</th>
+                                        <th class="th">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% for (const row of list) { %>
+                                        <% const st=String(row.status || '' ).toLowerCase(); const
+                                            canCancel=st==='unpaid' ; const canRefund=st==='paid' ; %>
+                                            <tr class="tr" data-row-kind="invoice"
+                                                data-invoice-id="<%- row.invoiceId || row.id || row.idRaw %>">
+                                                <td class="td font-mono"><%- row.invoiceId || row.id || row.idRaw %>
+                                                </td>
+                                                <td class="td"><%- row.amountSats %></td>
+                                                <td class="td"><span class="badge"><%- row.status %></span></td>
+                                                <td class="td"><%- row.payer || row.payerPrincipal || '' %></td>
+                                                <td class="td"><%- row.memo || '' %></td>
+                                                <td class="td"><%- row.createdAt || '' %></td>
+                                                <td class="td">
+                                                    <div class="flex gap-2">
+                                                        <button class="btn xs secondary"
+                                                            data-action="view-invoice">View</button>
+                                                        <% if (canCancel) { %>
+                                                            <button class="btn xs danger"
+                                                                data-action="cancel-invoice">Cancel</button>
+                                                            <% } %>
+                                                                <% if (canRefund) { %>
+                                                                    <button class="btn xs warn"
+                                                                        data-action="refund-invoice">Refund</button>
+                                                                    <% } %>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                        <% } %>
+            </div>
+        </section>
+        <!-- tiny modal for invoice view -->
+        <dialog id="invoice-dialog">
+            <article class="card max-w-xl">
+                <header class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Invoice</h3>
+                    <button class="btn xs ghost" type="button" data-close>✕</button>
+                </header>
+                <div id="invoice-dialog-body" class="mt-3 text-sm"></div>
+            </article>
+            <form method="dialog"><button hidden>close</button></form>
+        </dialog>
+        <!-- Required hydration only -->
+        <script id="__PAGE__DATA" type="application/json"><%- JSON.stringify({
+  kind: 'invoices',
+  storeId: __storeId,
+  filterUrl: __storeId ? `/merchant/${__storeId}/invoices/filter` : '',
+  actionsBase: __storeId ? `/merchant/${__storeId}/invoices` : '',
+  csrfToken: (typeof csrfToken === 'string') ? csrfToken : null
+}) %></script>
+        <script>window.__PAGE__ = JSON.parse(document.getElementById('__PAGE__DATA')?.textContent || '{}');</script>
+
+        <!-- Single Island only -->
+        <script src="/static/js/InvoiceLedgerIsland.js" type="module"></script>

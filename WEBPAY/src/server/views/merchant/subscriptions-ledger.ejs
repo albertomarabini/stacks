@@ -1,0 +1,133 @@
+<% layout('layout-merchant') %>
+
+<%
+  // Robust storeId resolution (same pattern you used on invoices)
+  const __storeId =
+    (typeof storeId === 'string' && storeId) ? storeId :
+    (typeof locals !== 'undefined' && typeof locals.storeId === 'string' && locals.storeId) ? locals.storeId : '';
+%>
+
+<section class="max-w-6xl mx-auto">
+  <h1 class="page-h1" style="color: var(--brand)">Subscriptions</h1>
+
+  <!-- Filters: Status, Next-due window, Text search -->
+  <form id="subscription-filter-form" class="card grid sm:grid-cols-4 gap-3 items-end"
+        action="/merchant/<%- __storeId %>/subscriptions/filter" method="POST">
+    <% if (typeof csrfToken==='string') { %>
+      <input type="hidden" name="_csrf" value="<%- csrfToken %>" />
+    <% } %>
+
+    <div class="field">
+      <label class="label">Status</label>
+      <select name="status" class="input">
+        <option value="">Any</option>
+        <option value="active">Active</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="label">Next due</label>
+      <select name="next_due" class="input">
+        <option value="">Any</option>
+        <option value="overdue">Overdue</option>
+        <option value="soon">Due soon</option>
+        <option value="scheduled">Scheduled</option>
+      </select>
+    </div>
+
+    <div class="field sm:col-span-1">
+      <label class="label">Search</label>
+      <input class="input" type="text" name="q" placeholder="subscriber or ID" />
+    </div>
+
+    <div class="flex gap-2">
+      <button class="btn" type="submit">Apply</button>
+    </div>
+  </form>
+
+  <!-- Results -->
+  <div id="subs-ledger-results" class="mt-4">
+    <% if (!Array.isArray(list) || list.length===0) { %>
+      <div class="card text-muted">No subscriptions yet</div>
+    <% } else { %>
+      <div class="overflow-x-auto card p-0">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="th">Subscription</th>
+              <th class="th">Subscriber</th>
+              <th class="th">Amount (sats)</th>
+              <th class="th">Interval (blocks)</th>
+              <th class="th">Status</th>
+              <th class="th">Next due</th>
+              <th class="th">Last billed</th>
+              <th class="th">Mode</th>
+              <th class="th">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% for (const row of list) { %>
+              <% const st=String(row.status || '' ).toLowerCase(); const isActive=st==='active'; %>
+              <tr class="tr" data-row-kind="subscription" data-subscription-id="<%- row.id || row.subscriptionId %>">
+                <td class="td font-mono"><%- row.id || row.subscriptionId %></td>
+                <td class="td">
+                  <div class="flex items-center gap-2">
+                    <!-- identicon hook could be a CSS bg or <img> -->
+                    <span class="inline-block h-5 w-5 rounded-full bg-gray-200"></span>
+                    <span class="font-mono"><%- row.subscriber || row.subscriberPrincipal || '' %></span>
+                  </div>
+                </td>
+                <td class="td"><%- row.amountSats %></td>
+                <td class="td"><%- row.intervalBlocks %></td>
+                <td class="td"><span class="badge"><%- isActive ? 'Active' : 'Cancelled' %></span></td>
+                <td class="td"><%- row.nextDue || '' %></td>
+                <td class="td"><%- row.lastBilled || '' %></td>
+                <td class="td">invoice</td>
+                <td class="td">
+                  <div class="flex gap-2">
+                    <% if (isActive) { %>
+                      <button class="btn xs secondary" data-action="generate-invoice">Generate invoice</button>
+                      <button class="btn xs" data-action="send-email">Send email</button>
+                      <button class="btn xs danger" data-action="cancel-subscription">Cancel</button>
+                    <% } %>
+                    <button class="btn xs ghost" data-action="view-details">Details</button>
+                  </div>
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+</section>
+
+<!-- Success sheet for “Generate invoice now” -->
+<dialog id="sub-success-dialog">
+  <article class="card max-w-xl">
+    <header class="flex items-center justify-between">
+      <h3 class="text-lg font-semibold">Invoice created</h3>
+      <button class="btn xs ghost" type="button" data-close>✕</button>
+    </header>
+    <div id="sub-success-body" class="mt-3 text-sm"></div>
+    <footer class="mt-4 flex gap-2">
+      <button class="btn xs" type="button" data-copy-link>Copy Link</button>
+      <button class="btn xs" type="button" data-send-email>Send Email</button>
+    </footer>
+  </article>
+  <form method="dialog"><button hidden>close</button></form>
+</dialog>
+
+<!-- Page hydration -->
+<script id="__PAGE__DATA" type="application/json"><%- JSON.stringify({
+  kind: 'subscriptions',
+  storeId: __storeId,
+  filterUrl: __storeId ? `/merchant/${__storeId}/subscriptions/filter` : '',
+  actionsBase: __storeId ? `/merchant/${__storeId}/subscriptions` : '',
+  csrfToken: (typeof csrfToken === 'string') ? csrfToken : null
+}) %></script>
+<script>window.__PAGE__ = JSON.parse(document.getElementById('__PAGE__DATA')?.textContent || '{}');</script>
+
+<!-- Island -->
+<script src="/static/js/SubscriptionLedgerIsland.js" type="module"></script>

@@ -1,0 +1,12 @@
+<div class="brandbar">
+    <a href="/admin" class="brandbrand">
+      <% if (branding && branding.logoUrl) { %>
+        <img src="<%= branding.logoUrl %>" width="25" height="25" alt="<%= (branding.displayName || 'Brand') %> logo">
+      <% } %>
+      <span><%= (branding && branding.displayName) || 'Admin' %></span>
+    </a>
+    <div class="brandspacer"></div>
+    <% if (branding && (branding.supportUrl || branding.supportEmail)) { %>
+      <a class="support" href="<%= branding.supportUrl || ('mailto:' + branding.supportEmail) %>">Support</a>
+    <% } %>
+  </div>

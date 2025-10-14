@@ -22,7 +22,7 @@ export class MerchantProjectionPolicy {
     `;
   }
 
-  mapListRow(raw: any): Omit<MerchantRow, 'api_key' | 'hmac_secret'> {
+  mapListRow(raw: any): Omit<MerchantRow, 'stx_private_key' | 'hmac_secret'> {
     return {
       id: raw.id as string,
       principal: raw.principal as string,

@@ -1,0 +1,87 @@
+<% layout('layout-merchant') %>
+
+<%
+  // same storeId pattern used on your invoices page
+  const __storeId =
+    (typeof storeId === 'string' && storeId) ? storeId :
+    (typeof locals !== 'undefined' && typeof locals.storeId === 'string' && locals.storeId) ? locals.storeId : '';
+%>
+
+<section class="max-w-3xl mx-auto">
+  <h1 class="page-h1" style="color: var(--brand)">Settings</h1>
+
+  <form id="merchant-settings-form" class="card grid grid-cols-1 gap-3"
+        action="/merchant/<%- __storeId %>/settings" method="POST">
+    <% if (typeof csrfToken==='string') { %>
+      <input type="hidden" name="_csrf" value="<%- csrfToken %>" />
+    <% } %>
+
+    <!-- display_name -->
+    <div class="field">
+      <label class="label">Display name</label>
+      <input class="input" name="display_name" placeholder="e.g. Acme Coffee"
+        value="<%- (storeProfile && (storeProfile.display_name || storeProfile.displayName)) || '' %>">
+    </div>
+
+    <!-- logo_url -->
+    <div class="field">
+      <label class="label">Logo URL</label>
+      <input class="input" name="logo_url" placeholder="https://..."
+        value="<%- (storeProfile && (storeProfile.logo_url || storeProfile.logoUrl)) || '' %>">
+    </div>
+
+    <!-- brand_color -->
+    <div class="field">
+      <label class="label">Brand color</label>
+      <input class="input" name="brand_color" placeholder="#RRGGBB"
+        value="<%- (storeProfile && (storeProfile.brand_color || storeProfile.brandColor)) || '' %>"
+        pattern="^#?[0-9a-fA-F]{6}$">
+    </div>
+
+    <!-- support_email -->
+    <div class="field">
+      <label class="label">Support email</label>
+      <input class="input" name="support_email" placeholder="support@example.com"
+        value="<%- (storeProfile && (storeProfile.support_email || storeProfile.supportEmail)) || '' %>">
+    </div>
+
+    <!-- support_url -->
+    <div class="field">
+      <label class="label">Support URL</label>
+      <input class="input" name="support_url" placeholder="https://support.example.com"
+        value="<%- (storeProfile && (storeProfile.support_url || storeProfile.supportUrl)) || '' %>">
+    </div>
+
+    <!-- principal -->
+    <div class="field">
+        <label class="label">Principal</label>
+        <input class="input" name="principal" placeholder="Merchant principal"
+          value="<%- (storeProfile && storeProfile.principal) || '' %>">
+      </div>
+
+    <!-- STX -->
+    <div class="field">
+        <label class="label">Merchant Stx Private Key</label>
+        <input class="input" type="password" name="stx_private_key" value="">
+        <p class="text-xs text-muted mt-1">This value will stay hidden for security reasons.</p>
+      </div>
+
+    <div class="flex gap-2">
+      <button class="btn" type="submit">Save settings</button>
+      <button class="btn secondary" type="button" data-reset>Reset</button>
+    </div>
+  </form>
+</section>
+
+<!-- Hydration -->
+<script id="__PAGE__DATA" type="application/json"><%- JSON.stringify({
+  kind: 'merchant-settings',
+  storeId: __storeId,
+  saveUrl: __storeId ? `/merchant/${__storeId}/settings` : '',
+  csrfToken: (typeof csrfToken === 'string') ? csrfToken : null,
+  // pass through the entire profile you already fetched (no filtering)
+  initial: (typeof storeProfile !== 'undefined') ? storeProfile : null
+}) %></script>
+<script>window.__PAGE__ = JSON.parse(document.getElementById('__PAGE__DATA')?.textContent || '{}');</script>
+
+<script src="/static/js/MerchantSettingsIsland.js" type="module"></script>

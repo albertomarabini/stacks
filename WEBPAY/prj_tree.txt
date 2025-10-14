@@ -1,0 +1,108 @@
+.
+├── public
+│   └── static
+│       ├── css
+│       │   └── app.css
+│       └── js
+│           ├── AdminKeysIsland.js
+│           ├── AdminKeysIsland.js.map
+│           ├── BrandingSettingsIsland.js
+│           ├── BrandingSettingsIsland.js.map
+│           ├── MagicLinkIsland.js
+│           ├── MagicLinkIsland.js.map
+│           ├── POSIsland.js
+│           ├── POSIsland.js.map
+│           ├── StatusStripIsland.js
+│           └── StatusStripIsland.js.map
+├── scripts
+│   └── build-client.mjs
+├── src
+│   ├── client
+│   │   └── islands
+│   │       ├── helpers
+│   │       │   ├── DrawerContentRenderer.ts
+│   │       │   ├── MagicLinkBlobParser.ts
+│   │       │   ├── POSElementBinder.ts
+│   │       │   ├── QRCodeRenderer.ts
+│   │       │   ├── StatusPollingBackoffManager.ts
+│   │       │   ├── StatusStripDomRenderer.ts
+│   │       │   └── StatusStripStatusMapper.ts
+│   │       ├── AdminKeysIsland.ts
+│   │       ├── BrandingSettingsIsland.ts
+│   │       ├── MagicLinkIsland.ts
+│   │       ├── POSIsland.ts
+│   │       └── StatusStripIsland.ts
+│   ├── server
+│   │   ├── controllers
+│   │   │   ├── admin
+│   │   │   │   ├── AdminContextScopeEnforcer.ts
+│   │   │   │   ├── BrandingCssVariableInjector.ts
+│   │   │   │   ├── SecretFieldOmitter.ts
+│   │   │   │   └── StoreCreationValidator.ts
+│   │   │   ├── merchant
+│   │   │   │   ├── ApiKeyRevealStateManager.ts
+│   │   │   │   ├── BrandingContextFetcher.ts
+│   │   │   │   ├── HydrationObjectBuilder.ts
+│   │   │   │   └── InputValidationDelegate.ts
+│   │   │   ├── AdminRouteHandlers.ts
+│   │   │   ├── MerchantRouteHandlers.ts
+│   │   │   └── PublicRouteHandlers.ts
+│   │   ├── middleware
+│   │   │   ├── CSRFandSecurityMiddleware.ts
+│   │   │   ├── ErrorMiddleware.ts
+│   │   │   ├── ExpressCSPHashManager.ts
+│   │   │   └── StaticAssetMiddleware.ts
+│   │   ├── services
+│   │   │   ├── AuthService.ts
+│   │   │   ├── BrandingService.ts
+│   │   │   ├── BridgeClient.ts
+│   │   │   ├── InvoiceService.ts
+│   │   │   ├── MagicLinkService.ts
+│   │   │   ├── MagicLinkValidationService.ts
+│   │   │   ├── StoreService.ts
+│   │   │   └── SubscriptionService.ts
+│   │   ├── types
+│   │   │   ├── qrcode.d.ts
+│   │   │   └── session.d.ts
+│   │   ├── utils
+│   │   │   ├── BrandColorSanitizer.ts
+│   │   │   ├── BrandingSSRInjector.ts
+│   │   │   ├── HydrationInjector.ts
+│   │   │   └── NoCacheHeaderSetter.ts
+│   │   ├── views
+│   │   │   ├── admin
+│   │   │   │   ├── admin-home.ejs
+│   │   │   │   ├── bootstrap.ejs
+│   │   │   │   ├── keys.ejs
+│   │   │   │   ├── poller.ejs
+│   │   │   │   ├── stores.ejs
+│   │   │   │   ├── sync.ejs
+│   │   │   │   ├── token.ejs
+│   │   │   │   └── webhooks.ejs
+│   │   │   ├── base.ejs
+│   │   │   ├── error.ejs
+│   │   │   ├── invoice.ejs
+│   │   │   ├── landing.ejs
+│   │   │   ├── magic-link.ejs
+│   │   │   └── SSRViewRenderer.ts
+│   │   ├── ApplicationBootstrapper.ts
+│   │   ├── config.ts
+│   │   ├── ExpressApp.ts
+│   │   ├── index.ts
+│   │   └── ShutdownCoordinator.ts
+│   └── shared
+│       ├── contracts
+│       │   └── interfaces.ts
+│       ├── models
+│       │   └── dto.ts
+│       └── utils
+│           └── QRCodeUtility.ts
+├── .env
+├── package.json
+├── package-lock.json
+├── prj_tree.txt
+├── README.md
+├── result_files_30-09-25-18_22_42.zip
+└── tsconfig.json
+
+24 directories, 82 files

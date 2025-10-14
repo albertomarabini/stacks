@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title><%= (branding && branding.displayName) || "Webpay" %></title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <style>:root{--brand:<%= branding?.brandColor || "#0ea5e9" %>}</style>
+</head>
+<body>
+
+  <header class="brandbar">
+    <div class="brandbrand">
+      <span><%= (branding && branding.displayName) || "Webpay" %></span>
+    </div>
+    <div class="brandspacer"></div>
+    <a class="support" href="https://ef00f80981e3.ngrok-free.app">Support</a>
+  </header>
+
+  <main class="container">
+    <div class="page-header">
+      <div class="page-title">
+        <h1>Welcome to <%- (branding && branding.displayName ) ? branding.displayName  : "Webpay" %></h1>
+      </div>
+    </div>
+
+    <p class="text-muted">This is the landing page.</p>
+
+    <!-- ===========================================================
+         Developer Shortcuts (GET routes)
+         =========================================================== -->
+    <section id="dev-shortcuts" style="margin-top:2rem;">
+      <h2>Testing: Login Shortcuts (GET)</h2>
+
+      <!-- Server Test Login -->
+      <div class="card" style="margin-top:1rem;">
+        <h3>Server Test Login</h3>
+        <p class="text-muted">
+          Simple GET that logs you in as admin on the dev server.
+        </p>
+        <a class="btn" href="<%- (branding && branding.baseURL ) ? branding.baseURL  : 'http://localhost:4000'%>/__dev__/login-admin">Login as Admin</a>
+        <p class="text-muted" style="margin-top:.5rem;">
+          GET <code><%- (branding && branding.baseURL ) ? branding.baseURL  : 'http://localhost:4000'%>/__dev__/login-admin</code>
+        </p>
+      </div>
+
+      <!-- Merchant Test Login (requires storeId in the path) -->
+      <div class="card" style="margin-top:1rem;">
+        <h3>Merchant Test Login</h3>
+        <p class="text-muted">
+          Test Log in as a merchant for the specified store.
+        </p>
+        <div class="field">
+          <label class="label">Store ID (required)</label>
+          <input type="text" id="storeIdLogin" class="input" placeholder="your-store-id">
+        </div>
+        <div class="flex" style="gap:.5rem;">
+          <a id="merchant-login-link" class="btn" href="<%- (branding && branding.baseURL ) ? branding.baseURL  : 'http://localhost:4000'%>/__dev__/login-merchant/" aria-disabled="true">Login as Merchant</a>
+        </div>
+        <p class="text-muted" style="margin-top:.5rem;">
+          Pattern: GET <code><%- (branding && branding.baseURL ) ? branding.baseURL  : 'http://localhost:4000'%>/__dev__/login-merchant/:storeId</code>
+        </p>
+      </div>
+    </section>
+
+    <!-- ===========================================================
+         Checkout testing (POST /checkout/:storeId)
+         NOTE: storeId is part of the URL path; the island sets the
+               form action to /checkout/&lt;storeId&gt; on submit.
+         =========================================================== -->
+    <section id="testing" style="margin-top:2rem;">
+      <h2>Testing: <code>POST /checkout/:storeId</code></h2>
+
+      <p class="text-muted">
+        Creates a new invoice for the provided <code>storeId</code>. Validates:
+        <span class="pill">amount_sats &gt; 0</span>,
+        <span class="pill">120 ≤ ttl_seconds ≤ 1800</span>,
+        <span class="pill">memo: string</span>.
+        On success the server calls <code>bridgeClient.prepareInvoice</code> and
+        responds with <code>302</code> redirect to the returned <code>magicLink</code>.
+      </p>
+
+      <div class="card" style="margin-top:1rem;">
+        <form id="checkout-form" method="POST" action="/checkout/_STORE_ID_WILL_BE_SET_BY_JS_">
+          <div class="field">
+            <label class="label">Store ID (required)</label>
+            <input type="text" id="storeId" name="__storeId_ui_only__" class="input" required placeholder="your-store-id">
+          </div>
+
+          <div class="field">
+            <label class="label">Amount (sats)</label>
+            <input type="number" name="amount_sats" class="input" min="1" required value="1">
+          </div>
+
+          <div class="field">
+            <label class="label">TTL (seconds)</label>
+            <input type="number" name="ttl_seconds" class="input" min="120" max="1800" required value="300">
+          </div>
+
+          <div class="field">
+            <label class="label">Memo (optional)</label>
+            <input
+              type="text"
+              name="memo"
+              class="input"
+              placeholder="Purchase at <%= (branding && branding.displayName) || 'Merchant' %>">
+          </div>
+
+          <!-- Pushing through POC -->
+          <input type="hidden" name="orderId" value="">
+          <input type="hidden" name="payerPrincipal" value="">
+          <input type="hidden" name="return" class="input" value="">
+
+          <div class="flex" style="gap:.5rem;margin-top:1rem;">
+            <button type="submit" class="btn">Submit Test Checkout</button>
+            <button type="reset" class="btn secondary">Reset</button>
+          </div>
+
+          <div id="form-hint" class="text-muted" style="margin-top:.75rem;font-size:.9rem;">
+            On submit, this form will POST to
+            <code>/checkout/&lt;storeId&gt;</code> with the fields above.
+          </div>
+        </form>
+      </div>
+
+      <h3>Route Composition</h3>
+      <pre><code>POST /checkout/:storeId
+
+URL params:
+  - storeId (required) ← taken from the "Store ID" input and placed in the URL path by the page script
+
+Body (application/x-www-form-urlencoded):
+{
+  "amount_sats": number,           // required, > 0
+  "ttl_seconds": number,           // required, integer 120..1800
+  "memo": string,                  // optional
+  "orderId": string,               // optional
+  "payerPrincipal": string,        // optional
+  "return": string                 // optional, URL
+}
+
+Success:
+  302 Redirect → magicLink (from bridgeClient.prepareInvoice)
+
+Errors:
+  400/422 validation errors; 502 if bridge didn't return a magicLink
+</code></pre>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Testing utilities for <%= (branding && branding.displayName) || "Webpay" %>. Use responsibly ✌️</p>
+  </footer>
+
+  <!-- hydrate branding for islands if needed -->
+  <script id="__PAGE__DATA" type="application/json"><%- JSON.stringify(branding || {}) %></script>
+  <script>window.__PAGE__ = { branding:JSON.parse(document.getElementById('__PAGE__DATA')?.textContent)} || '{}';</script>
+  <!-- island -->
+  <script type="module" src="/static/js/LandingTestIsland.js"></script>
+</body>
+</html>

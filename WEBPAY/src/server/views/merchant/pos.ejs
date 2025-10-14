@@ -1,0 +1,56 @@
+<% layout('layout-merchant') %>
+
+<section id="pos-root" class="max-w-2xl mx-auto space-y-4">
+  <h1 class="page-h1" style="color: var(--brand)"><%- (branding && branding.displayName) || 'Point of Sale' %></h1>
+
+  <form id="new-sale-form" class="space-y-3">
+    <div class="field">
+      <label class="label">Amount (sats)</label>
+      <input name="amount" type="number" min="1" class="input" />
+    </div>
+    <input name="ttl" type="hidden" value="180" class="input" />
+    <input name="displayNameField" type="hidden" value="<%- (branding && branding.displayName) || 'Merchant' %>" class="input" />
+    <div class="field">
+      <label class="label">Memo</label>
+      <input name="memo" type="text" class="input" maxlength="34" />
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn">Create Invoice</button>
+      <!-- this one is part of the form UI, but the form is hidden while paying -->
+      <button id="new-sale" type="button" class="btn secondary" disabled>New invoice</button>
+    </div>
+
+    <div id="pos-form-error" class="alert error" style="display:none;"></div>
+  </form>
+
+  <div id="payment-card" class="card" style="display:none;">
+    <div class="qr-wrap">
+      <canvas id="qr" width="256" height="256" style="display:none;"></canvas>
+    </div>
+
+    <!-- live status from StatusStripIsland -->
+    <div id="status-strip" class="status-strip mt-2 text-sm"></div>
+
+    <!-- countdown to expiration -->
+    <div id="expiry-wrap" class="mt-2 text-sm text-muted" style="display:none;">
+      <span id="expiry-timer"></span>
+    </div>
+
+    <div class="mt-2 space-x-2">
+      <!-- <button id="show-qr" type="button" class="btn secondary">Show QR</button> -->
+      <button id="copy-link" type="button" class="btn secondary">Copy Link</button>
+      <span id="copy-feedback" class="text-muted" style="display:none;"></span>
+    </div>
+
+    <!-- this is the important new action shown when paid/expired/timer 0 -->
+    <div class="mt-4">
+      <button id="new-invoice" type="button" class="btn">New invoice</button>
+    </div>
+  </div>
+</section>
+
+<script id="__PAGE__DATA" type="application/json"><%- JSON.stringify(hydration || {}) %></script>
+<script>window.__PAGE__ = JSON.parse(document.getElementById('__PAGE__DATA')?.textContent || '{}');</script>
+
+<script src="/static/js/POSIsland.js" type="module"></script>
+<script src="/static/js/StatusStripIsland.js" type="module"></script>

@@ -1,7 +1,4 @@
 // src/schedulers/SubscriptionScheduler.ts
-import { makeContractCall, broadcastTransaction } from '@stacks/transactions';
-import { STACKS_MAINNET, STACKS_TESTNET, STACKS_DEVNET, STACKS_MOCKNET } from '@stacks/network';
-
 import type {
   IStacksChainClient,
   IContractCallBuilder,
@@ -156,33 +153,16 @@ export class SubscriptionScheduler {
       expiresAtBlock: input.expiresAtBlocks,
     });
 
-    if (!this.cfg.isAutoBroadcastEnabled()) {
+    if (!this.cfg.isAutoBroadcastOnChainEnabled()) {
       throw new Error('auto_broadcast_disabled');
     }
 
     const senderKey = String(process.env.SCHEDULER_SENDER_KEY ?? process.env.SIGNER_PRIVATE_KEY ?? '');
-    const { contractAddress, contractName, functionName, functionArgs } = payload;
-    const networkName = this.cfg.getNetwork();
-
-    const network =
-      networkName === 'mainnet' ? STACKS_MAINNET :
-      networkName === 'testnet' ? STACKS_TESTNET :
-      networkName === 'devnet'  ? STACKS_DEVNET  :
-      STACKS_MOCKNET;
-
-    const tx = await makeContractCall({
-      contractAddress,
-      contractName,
-      functionName,
-      functionArgs,
-      senderKey,
-      network
-      // anchorMode removed — not part of SignedContractCallOptions in v7
-    });
-
-    const resp: any = await broadcastTransaction({ transaction: tx, network });
-    if (typeof resp === 'string') return resp;
-    if (resp && typeof resp.txid === 'string') return resp.txid;
-    throw new Error('broadcast_failed');
+    // Delegate to the chain client so it applies configured baseUrl, PCs, modes, retries.
+    const { txid } = await this.chain.signAndBroadcast(
+      { ...payload, network: this.cfg.getNetwork() as any },
+      senderKey
+    );
+    return txid;
   }
 }

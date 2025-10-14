@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title><%= (branding && branding.displayName) || 'Admin' %></title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <% if (brandCssStyle) { %><%- brandCssStyle %><% } %>
+</head>
+<body class="bg-gray-50">
+  <%- include('./_brandbar', { branding }) %>
+  <main style="max-width:960px;margin:3rem auto;padding:2rem;background:#fff;border-radius:1rem;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+    <h1 class="text-2xl font-semibold mb-4">Admin Console</h1>
+    <p class="text-gray-600 mb-6">Welcome, admin.</p>
+
+    <nav class="grid grid-cols-2 gap-3">
+      <a class="btn" href="/admin/stores">Stores</a>
+      <!-- <a class="btn" href="/admin/keys">API Keys</a> -->
+      <a class="btn" href="/admin/token">Token Config</a>
+      <!-- <a class="btn" href="/admin/bootstrap">Bootstrap</a>
+      <a class="btn" href="/admin/sync">Sync On-Chain</a>
+      <a class="btn" href="/admin/poller">Poller</a>
+      <a class="btn" href="/admin/webhooks">Webhooks</a> -->
+    </nav>
+  </main>
+
+  <style>
+    .btn{display:inline-block;padding:.75rem 1rem;border-radius:.75rem;background:var(--brand,#111827);color:#fff;text-decoration:none;text-align:center}
+    .btn:hover{filter:brightness(1.05)}
+  </style>
+</body>
+</html>

@@ -48,7 +48,19 @@ export class ConfigService implements IConfigService {
     return this.snap.priceApiUrl;
   }
 
-  isAutoBroadcastEnabled(): boolean {
-    return this.snap.autoBroadcast;
+  isAutoBroadcastOnChainEnabled(): boolean {
+    return this.snap.autoBroadcastOnChain;
+  }
+
+  getServerSignerPrivKey(): string | undefined{
+    return this.snap.serverSignerPrivKey;
+  }
+
+  getAdminToken():string | undefined{
+    return this.snap.adminToken;
+  }
+
+  getHiroAPIKey():string | undefined{
+    return this.snap.HiroAPIKey;
   }
 }

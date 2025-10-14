@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../src/client/islands/BrandingSettingsIsland.ts"],
+  "sourcesContent": ["/**\n * BrandingSettingsIsland.ts\n * Client-side JS island for live branding color preview in settings/profile view.\n * Stateless, browser-local. All logic is within handleBrandColorInputChange.\n */\n\n/**\n * handleBrandColorInputChange\n * Handler for brand color input field's onchange and onblur events.\n * Validates input as hex color (#RRGGBB) and sets --brand CSS variable in preview node.\n * @param event Event object from input change/blur\n */\nexport function handleBrandColorInputChange(event: Event): void {\n  const input = event.target as HTMLInputElement;\n  const value = input.value.trim();\n  const previewNode = document.getElementById('brand-preview');\n  if (!previewNode) return;\n  if (/^#[0-9A-Fa-f]{6}$/.test(value)) {\n    previewNode.style.setProperty('--brand', value);\n  } else {\n    previewNode.style.setProperty('--brand', '#111827');\n  }\n}\n"],
+  "mappings": ";AAYO,SAAS,4BAA4B,OAAoB;AAC9D,QAAM,QAAQ,MAAM;AACpB,QAAM,QAAQ,MAAM,MAAM,KAAK;AAC/B,QAAM,cAAc,SAAS,eAAe,eAAe;AAC3D,MAAI,CAAC,YAAa;AAClB,MAAI,oBAAoB,KAAK,KAAK,GAAG;AACnC,gBAAY,MAAM,YAAY,WAAW,KAAK;AAAA,EAChD,OAAO;AACL,gBAAY,MAAM,YAAY,WAAW,SAAS;AAAA,EACpD;AACF;",
+  "names": []
+}

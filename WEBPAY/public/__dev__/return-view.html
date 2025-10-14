@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Return Viewer</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <style>:root{--brand:#0ea5e9}</style>
+</head>
+<body>
+  <main class="container">
+    <div class="page-header">
+      <div class="page-title">
+        <h1>Payment Return Viewer</h1>
+      </div>
+      <div class="page-nav">
+        <a class="link" href="/">← back to home</a>
+      </div>
+    </div>
+
+    <p class="text-muted">
+      This page shows the fields your site would receive after a payment completes or is cancelled.
+      It reads **query parameters** only. Use the server forwarder below to convert POST bodies into query params.
+    </p>
+
+    <div class="card" style="margin-top:1rem;">
+      <h2>Received Fields</h2>
+      <div id="empty" class="text-muted">No fields received.</div>
+      <table id="kv" style="display:none;">
+        <thead><tr><th>Key</th><th>Value</th></tr></thead>
+        <tbody id="kv-body"></tbody>
+      </table>
+
+      <h3 style="margin-top:1rem;">As JSON</h3>
+      <pre id="json">{}</pre>
+
+      <div style="margin-top:.75rem;">
+        <button id="copy" class="btn">Copy JSON</button>
+        <button id="clear" class="btn secondary">Clear (reload)</button>
+      </div>
+    </div>
+
+    <h2 style="margin-top:1.5rem;">How to use</h2>
+    <ol class="text-muted">
+      <li>Configure your payment "returnURL". The server will accept <strong>POST</strong></li>
+    </ol>
+  </main>
+
+  <footer class="site-footer">
+    <p>Dev tool — shows exactly what your app would receive after payment flow.</p>
+  </footer>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const obj = {};
+      for (const [k,v] of params.entries()) {
+        if (obj.hasOwnProperty(k)) {
+          const cur = obj[k];
+          obj[k] = Array.isArray(cur) ? cur.concat(v) : [cur, v];
+        } else {
+          obj[k] = v;
+        }
+      }
+
+      const empty = document.getElementById('empty');
+      const table = document.getElementById('kv');
+      const tbody = document.getElementById('kv-body');
+      const pre = document.getElementById('json');
+
+      if (Object.keys(obj).length === 0) {
+        empty.style.display = '';
+        table.style.display = 'none';
+      } else {
+        empty.style.display = 'none';
+        table.style.display = '';
+        Object.keys(obj).sort().forEach((k) => {
+          const tr = document.createElement('tr');
+          const tdK = document.createElement('td');
+          const tdV = document.createElement('td');
+          tdK.textContent = k;
+          tdV.textContent = typeof obj[k] === 'string' ? obj[k] : JSON.stringify(obj[k]);
+          tr.appendChild(tdK); tr.appendChild(tdV);
+          tbody.appendChild(tr);
+        });
+      }
+      pre.textContent = JSON.stringify(obj, null, 2);
+
+      document.getElementById('copy').addEventListener('click', () => {
+        navigator.clipboard.writeText(pre.textContent || '{}');
+      });
+      document.getElementById('clear').addEventListener('click', () => {
+        window.location.href = window.location.pathname;
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Admin • API Keys</title>
+
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <% if (brandCssStyle) { %>
+        <%= brandCssStyle %>
+            <% } %>
+</head>
+
+<body class="bg-gray-50">
+    <main
+        style="max-width:720px;margin:3rem auto;padding:2rem;background:#fff;border-radius:1rem;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+        <h1 class="text-2xl font-semibold mb-4">API Keys</h1>
+        <% if (typeof apiKey==='string' || typeof hmacSecret==='string' ) { %>
+            <p><strong>API Key:</strong> <code><%= apiKey || '—' %></code></p>
+            <p><strong>HMAC Secret:</strong> <code><%= hmacSecret || '—' %></code></p>
+            <% } else { %>
+        <p class="text-gray-600">Use the rotate keys action to reveal (one-time) keys.</p>
+        <% } %>
+    </main>
+</body>
+
+</html>

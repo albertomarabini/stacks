@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS merchants (
   brand_color TEXT,
   webhook_url TEXT,
   hmac_secret TEXT NOT NULL,
-  api_key TEXT NOT NULL UNIQUE,
+  stx_private_key TEXT NOT NULL UNIQUE,
   active INTEGER NOT NULL DEFAULT 1,
   support_email TEXT,
   support_url TEXT,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS merchants (
   keys_dual_valid_until INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ux_merchants_principal ON merchants(principal);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_merchants_api_key ON merchants(api_key);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_merchants_api_key ON merchants(stx_private_key);
 
 CREATE TABLE IF NOT EXISTS invoices (
   id_raw TEXT PRIMARY KEY,

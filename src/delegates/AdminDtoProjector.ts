@@ -1,7 +1,7 @@
 // src/delegates/AdminDtoProjector.ts
 import type { MerchantRow, InvoiceRow, WebhookLogRow } from '../contracts/domain';
 
-export type MerchantProjectionRow = Omit<MerchantRow, 'api_key' | 'hmac_secret'>;
+export type MerchantProjectionRow = Omit<MerchantRow, 'stx_private_key' | 'hmac_secret'>;
 
 export type MerchantDto = {
   id: string;

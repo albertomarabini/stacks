@@ -1,0 +1,93 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      // {
+      //   "name": "WEBPAY: Debug",
+      //   "type": "node",
+      //   "request": "launch",
+      //   "cwd": "${workspaceFolder}",
+      //   "program": "${workspaceFolder}/src/server/index.ts",
+      //   "runtimeExecutable": "node",
+      //   "runtimeArgs": [
+      //     "-r", "ts-node/register",
+      //     "-r", "tsconfig-paths/register"
+      //   ],
+      //   "env": {
+      //     "AUTH_BYPASS": "1",
+      //     "PORT": "4000",
+      //     "TS_NODE_PROJECT": "${workspaceFolder}/tsconfig.json"
+      //   },
+      //   "console": "integratedTerminal",
+      //   "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
+      //   "autoAttachChildProcesses": true
+      // },
+
+
+      {
+        "name": "WEBPAY: Debug (tsx + watcher)",
+        "type": "node",
+        "request": "launch",
+        "cwd": "${workspaceFolder}",
+        "program": "${workspaceFolder}/src/server/index.ts",
+        "runtimeExecutable": "node",
+        "runtimeArgs": [
+          "--import=tsx",
+          "--import=tsconfig-paths/register",
+          "--enable-source-maps"
+        ],
+        "preLaunchTask": "watch:client",
+        "env": {
+          "AUTH_BYPASS": "1",
+          "PORT": "4000"
+        },
+        "console": "integratedTerminal",
+        "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
+        "autoAttachChildProcesses": true
+      },
+      {
+        "name": "Debug find-stx-key",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/scripts/get-key.mjs",
+        "args": [
+          "--mnemonic",
+          "repeat beyond army section arrange fix letter author behind exotic bitter merge oblige wheat stuff genius clarify license insect payment swear venue grit myself",
+          "--address",
+          "ST2CF5DCN3AJXX2P948GFWGH0BNAVS0KT82YAK9DR",
+          "--max",
+          "50"
+        ],
+        "runtimeArgs": ["--enable-source-maps"],
+        "cwd": "${workspaceFolder}",
+        "skipFiles": ["<node_internals>/**"],
+        "console": "integratedTerminal"
+      }
+
+
+
+
+      // {
+      //          "name": "WEBPAY: Debug (tsx)",
+      //          "type": "node",
+      //          "request": "launch",
+      //          "cwd": "${workspaceFolder}",
+      //         //  "program": "${workspaceFolder}/src/server/index.ts",
+      //         //  "runtimeExecutable": "node",
+      //         //  "runtimeArgs": [
+      //         //    "--import=tsx",
+      //         //    "--import=tsconfig-paths/register",
+      //         //    "--enable-source-maps"
+      //         //  ],
+      //         "runtimeExecutable": "npm",
+      //         "runtimeArgs": ["run", "dev:debug"],
+      //         "program": "",
+      //          "env": {
+      //            "AUTH_BYPASS": "1",
+      //            "PORT": "4000"
+      //          },
+      //          "console": "integratedTerminal",
+      //          "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
+      //          "autoAttachChildProcesses": true
+      //        }
+    ]
+  }

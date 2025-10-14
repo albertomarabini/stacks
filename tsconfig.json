@@ -2,6 +2,7 @@
   "compilerOptions": {
     "module": "commonjs",
     "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
     "target": "ES2020",
     "esModuleInterop": true,
     "verbatimModuleSyntax": false,
@@ -15,5 +16,5 @@
     "typeRoots": ["./node_modules/@types", "./types"]
   },
   "include": ["src/**/*", "types/**/*.d.ts"],
-  "exclude": ["frontend/**/*", "dist", "node_modules"]
+  "exclude": ["frontend/**/*", "dist", "node_modules","WEBPAY/**/*"]
 }

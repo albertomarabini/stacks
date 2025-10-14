@@ -23,7 +23,7 @@ export class MerchantKeyRotationService {
     const apiKey = randomBytes(32).toString('hex');
     const hmacSecret = randomBytes(32).toString('hex');
 
-    store.updateMerchantKeysTx(storeId, apiKey, hmacSecret);
+    // store.updateMerchantKeysTx(storeId, apiKey, hmacSecret);
     this.deliveredOnce.add(storeId);
 
     return { ok: true, apiKey, hmacSecret };

@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title><%= (branding && branding.displayName) || 'Error' %></title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <style>:root{--brand:<%= (branding && branding.brandColor) || '#111827' %>}</style>
+</head>
+<body>
+  <main style="max-width:720px;margin:4rem auto;padding:2rem;background:#fff;border-radius:1rem;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+    <h1>Something went wrong</h1>
+    <p><%= (error && error.message) || "Unexpected error" %></p>
+    <% if (process.env.NODE_ENV !== 'production' && error && error.code) { %>
+      <p style="color:#666">code: <%= error.code %></p>
+    <% } %>
+  </main>
+</body>
+</html>

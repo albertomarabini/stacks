@@ -56,6 +56,7 @@ export class ApiCaseAndDtoMapper {
     };
   }
 
+
   storeToPrivateProfile(row: MerchantRow): StorePrivateProfileDTO {
     return {
       id: row.id,
@@ -63,7 +64,6 @@ export class ApiCaseAndDtoMapper {
       displayName: row.display_name ?? null,
       logoUrl: row.logo_url ?? null,
       brandColor: row.brand_color ?? null,
-      webhookUrl: row.webhook_url ?? undefined,
       supportEmail: row.support_email ?? null,
       supportUrl: row.support_url ?? null,
       allowedOrigins: row.allowed_origins

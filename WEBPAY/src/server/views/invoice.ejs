@@ -1,0 +1,12 @@
+<% layout('layouts/base') %>
+<section class="space-y-4">
+  <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
+    <h2 class="text-lg font-semibold">Invoice <%- invoice.invoiceId %></h2>
+    <p>Status: <strong><%- invoice.status %></strong></p>
+    <p>Amount: <%- invoice.amountSats %> sats</p>
+    <% if (invoice.txId) { %><p>Tx: <span class="font-mono"><%- invoice.txId.slice(0,10) %>…</span></p><% } %>
+  </div>
+  <%- include('../_partials/status-strip') %>
+</section>
+<script>window.__PAGE__ = JSON.parse('<%- JSON.stringify({ invoiceId: invoice.invoiceId }).replace(/</g, "\\u003c") %>');</script>
+<script type="module" src="/static/js/StatusStripIsland.js"></script>

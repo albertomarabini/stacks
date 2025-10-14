@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title><%= (branding && branding.displayName) || 'Admin' %> • Stores</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+  <% if (brandCssStyle) { %><%- brandCssStyle %><% } %>
+</head>
+<body class="bg-gray-50">
+  <%- include('./_brandbar', { branding }) %>
+  <main style="max-width:960px;margin:3rem auto;padding:2rem;background:#fff;border-radius:1rem;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+    <h1 class="text-2xl font-semibold mb-6">Stores</h1>
+
+    <% const _defaults = (typeof defaults !== 'undefined' && defaults) || {}; %>
+    <!-- Create store -->
+    <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-3">Create Store</h2>
+        <form method="post" action="/admin/stores" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input type="hidden" name="_csrf" value="<%= csrfToken || '' %>">
+            <input class="input"
+                name="principal"
+                placeholder="Merchant principal"
+                value="<%= (defaults && defaults.principal) || '' %>"
+                required
+                <%= (defaults && defaults.principal) ? 'readonly' : '' %> >
+            <input class="input" name="name" placeholder="Brand name" required>
+            <input class="input" name="display_name" placeholder="Display name">
+            <input class="input" name="logo_url" placeholder="Logo URL (https://...)">
+            <input class="input" name="brand_color" placeholder="Brand color (#RRGGBB)">
+            <input type="hidden" name="allowed_origins" value="<%= (defaults && defaults.allowed_origins) || '' %>" placeholder="Allowed origins (comma-separated)">
+            <input type="hidden" class="input md:col-span-2" value="" name="webhook_url" placeholder="Webhook URL (optional)">
+            <button class="btn md:col-span-2" type="submit">Create</button>
+        </form>
+        <style>
+        .input{padding:.6rem .8rem;border:1px solid #e5e7eb;border-radius:.6rem}
+        .btn{display:inline-block;padding:.75rem 1rem;border-radius:.75rem;background:var(--brand,#111827);color:#fff;text-decoration:none;text-align:center}
+        .btn:hover{filter:brightness(1.05)}
+        .pill{display:inline-block;padding:.25rem .5rem;border-radius:.5rem;background:#f3f4f6;font-size:.85rem}
+        </style>
+        <p class="text-gray-500 mt-2 text-sm">
+        Posts <code>name, display_name, logo_url, brand_color, allowed_origins, webhook_url</code> to <code>/admin/stores</code>.
+        </p>
+    </section>
+
+
+    <!-- Existing stores -->
+    <section>
+      <h2 class="text-xl font-semibold mb-3">Existing</h2>
+      <% if (Array.isArray(stores) && stores.length) { %>
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left">ID</th>
+              <th class="text-left">Name</th>
+              <th class="text-left">Principal</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+          <% stores.forEach(s => { const isActive = s.active === true; %>
+            <tr>
+              <td class="pr-4"><code><%= s.id %></code></td>
+              <td class="pr-4"><%= s.displayName || s.name || '—' %></td>
+              <td class="pr-4"><%= s.principal || '—' %></td>
+              <td class="pr-4">
+                <span class="pill"><%= isActive ? 'Active' : 'Disabled' %></span>
+              </td>
+              <td class="space-x-2">
+                <!-- Toggle active -->
+                <form method="post" action="/admin/stores/<%= encodeURIComponent(s.id) %>/activate" style="display:inline">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken || '' %>">
+                  <input type="hidden" name="active" value="<%= (!isActive).toString() %>">
+                  <button class="btn" type="submit"><%= isActive ? 'Disable' : 'Enable' %></button>
+                </form>
+
+                <!-- Rotate keys shortcut (optional) -->
+                <!-- <form method="post" action="/admin/stores/<%= encodeURIComponent(s.id) %>/rotate-keys" style="display:inline">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken || '' %>">
+                  <button class="btn" type="submit">Rotate Keys</button>
+                </form> -->
+
+                <!-- Delete (optional; only if Bridge supports it) -->
+                <!--
+                <form method="post" action="/admin/stores/<%= encodeURIComponent(s.id) %>/delete" style="display:inline"
+                      onsubmit="return confirm('Delete this store? This cannot be undone.')">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken || '' %>">
+                  <button class="btn" type="submit" style="background:#991b1b">Delete</button>
+                </form>
+                -->
+              </td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+      <% } else { %>
+        <p class="text-gray-600">No stores yet, or Bridge not connected.</p>
+      <% } %>
+    </section>
+  </main>
+</body>
+</html>

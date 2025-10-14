@@ -16,9 +16,10 @@ export interface ISqliteStore {
   findActiveByApiKey(apiKey: string): MerchantRow | undefined;
   insertMerchant(row: MerchantRow): void;
   updateMerchantActive(storeId: string, active: boolean): number;
-  updateMerchantKeysTx(storeId: string, apiKey: string, hmacSecret: string): void;
-  listMerchantsProjection(): Omit<MerchantRow, 'api_key' | 'hmac_secret'>[];
-  rotateKeysPersist(storeId: string, apiKey: string, hmacSecret: string, now: number):number;
+  // updateMerchantKeysTx(storeId: string, apiKey: string, hmacSecret: string): void;
+  updateStxPrivateKey(storeId: string, stx_private_key: string): void;
+  listMerchantsProjection(): Omit<MerchantRow, 'stx_private_key' | 'hmac_secret'>[];
+  // rotateKeysPersist(storeId: string, apiKey: string, hmacSecret: string, now: number):number;
   markKeysRevealedOnce(storeId: string, expectVersion: number, now: number):boolean;
   getMerchantById(storeId: string): MerchantRow | undefined;
   getInvoiceStatusByHex(idHex: string): InvoiceStatus | undefined;
@@ -34,6 +35,8 @@ export interface ISqliteStore {
       | 'support_email'
       | 'support_url'
       | 'allowed_origins'
+      | 'principal'
+
     >>
   ): void;
 

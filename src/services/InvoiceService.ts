@@ -9,6 +9,7 @@ import type {
 } from '../contracts/interfaces';
 import { PricingService } from './PricingService';
 import type { PublicInvoiceDTO, UnsignedContractCall } from '../contracts/domain';
+import { getAddressFromPrivateKey } from '@stacks/transactions';
 
 type StoreLike = { id: string; principal: string };
 
@@ -76,10 +77,6 @@ export class InvoiceService {
       expiresAtBlock,
     });
 
-    if (this.cfg.isAutoBroadcastEnabled()) {
-      await this.broadcastCreateInvoice(unsignedTx);
-    }
-
     const nowMs = Date.now();
     const nowSecs = Math.floor(nowMs / 1000);
     const quoteExpiresAt = nowMs + input.ttlSeconds * 1000;
@@ -130,8 +127,10 @@ export class InvoiceService {
     return { ...dto, magicLink, unsignedTx };
   }
 
-  async broadcastCreateInvoice(_unsignedCall: UnsignedContractCall): Promise<string> {
-    throw new Error('auto_broadcast_not_supported');
+  async broadcastCreateInvoice(unsignedCall: UnsignedContractCall, merchantKey: string): Promise<string> {
+    // Sign as merchant; Stacks.js will POST /v2/transactions and return { txid }. :contentReference[oaicite:7]{index=7}turn3file16
+    const { txid } = await this.chain.signAndBroadcast(unsignedCall as any, merchantKey);
+    return txid;
   }
 
   private assertPositiveInt(n: number, name: string): void {

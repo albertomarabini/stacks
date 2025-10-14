@@ -6,6 +6,7 @@ import type {
   IStacksChainClient,
   IContractCallBuilder,
   IWebhookDispatcher,
+  IConfigService,
 } from '../contracts/interfaces';
 import { PollerAdminBridge } from '../poller/PollerAdminBridge';
 import { AdminParamGuard } from '../delegates/AdminParamGuard';
@@ -22,6 +23,7 @@ type Deps = {
   builder: IContractCallBuilder;
   dispatcher: IWebhookDispatcher;
   pollerBridge: PollerAdminBridge;
+  cfg: IConfigService;
 };
 
 export class AdminApiController {
@@ -30,6 +32,7 @@ export class AdminApiController {
   private builder!: IContractCallBuilder;
   private dispatcher!: IWebhookDispatcher;
   private pollerBridge!: PollerAdminBridge;
+  private cfg!: IConfigService;
 
   private readonly paramGuard = new AdminParamGuard();
   private readonly projector = new AdminDtoProjector();
@@ -44,6 +47,7 @@ export class AdminApiController {
     this.builder = deps.builder;
     this.dispatcher = deps.dispatcher;
     this.pollerBridge = deps.pollerBridge;
+    this.cfg = deps.cfg;
   }
 
   async bootstrapAdmin(req: Request, res: Response) {
@@ -123,6 +127,21 @@ export class AdminApiController {
       : [],
   });
 
+
+  // POC ONLY: expose hmacSecret via admin channel
+  // guardrails: do not log the secret, do not include in any views/hydration
+  async getStoreSecret(req: Request, res: Response): Promise<void> {
+    const storeId = String(req.params.storeId || '');
+    this.paramGuard.assertUuid(storeId);
+    const row = this.store.getMerchantById(storeId);
+    if (!row) { res.status(404).end(); return; }
+
+    // Never log secrets; mark as no-store
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.json({ hmacSecret: row.hmac_secret });
+  }
+
+
   async createStore(req: Request, res: Response): Promise<void> {
     try {
       const body = (req.body && typeof req.body === 'object') ? req.body : {};
@@ -172,16 +191,16 @@ export class AdminApiController {
       return;
     }
 
-    const apiKey = randomBytes(32).toString('hex');
+    const apiKey = this.cfg.getAdminToken();
     const hmacSecret = randomBytes(32).toString('hex');
 
-    const version = this.store.rotateKeysPersist(storeId, apiKey, hmacSecret, now);
+    // const version = this.store.rotateKeysPersist(storeId, apiKey, hmacSecret, now);
 
-    const marked = this.store.markKeysRevealedOnce(storeId, version, now);
-    if (!marked) {
-      res.status(409).json({ error: 'already-revealed' });
-      return;
-    }
+    // const marked = this.store.markKeysRevealedOnce(storeId, version, now);
+    // if (!marked) {
+    //   res.status(409).json({ error: 'already-revealed' });
+    //   return;
+    // }
 
     res.status(200).json({ apiKey, hmacSecret });
   }
