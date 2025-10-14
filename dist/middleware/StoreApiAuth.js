@@ -13,11 +13,12 @@ class StoreApiAuth {
         const apiKey = req.get('X-API-Key') ||
             req.get('x-api-key') ||
             req.headers['x-api-key'];
-        if (!apiKey) {
+        const storeId = req.params['storeId'] || undefined;
+        if (!apiKey || !storeId || apiKey != process.env['ADMIN_TOKEN']) {
             res.status(401).end();
             return;
         }
-        const merchant = this.store.findActiveByApiKey(apiKey);
+        const merchant = this.store.getMerchantById(storeId);
         if (!merchant) {
             res.status(401).end();
             return;

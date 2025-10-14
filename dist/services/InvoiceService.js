@@ -45,9 +45,6 @@ class InvoiceService {
             memo: input.memo,
             expiresAtBlock,
         });
-        if (this.cfg.isAutoBroadcastEnabled()) {
-            await this.broadcastCreateInvoice(unsignedTx);
-        }
         const nowMs = Date.now();
         const nowSecs = Math.floor(nowMs / 1000);
         const quoteExpiresAt = nowMs + input.ttlSeconds * 1000;
@@ -94,8 +91,10 @@ class InvoiceService {
         const magicLink = `/i/${idRaw}`;
         return { ...dto, magicLink, unsignedTx };
     }
-    async broadcastCreateInvoice(_unsignedCall) {
-        throw new Error('auto_broadcast_not_supported');
+    async broadcastCreateInvoice(unsignedCall, merchantKey) {
+        // Sign as merchant; Stacks.js will POST /v2/transactions and return { txid }. :contentReference[oaicite:7]{index=7}turn3file16
+        const { txid } = await this.chain.signAndBroadcast(unsignedCall, merchantKey);
+        return txid;
     }
     assertPositiveInt(n, name) {
         if (!Number.isInteger(n) || n <= 0) {

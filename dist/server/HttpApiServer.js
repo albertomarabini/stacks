@@ -72,9 +72,11 @@ class HttpApiServer {
         app.post('/api/v1/stores/:storeId/refunds', auth, mask, express_1.default.json({ limit: JSON_LIMIT }), (req, res) => deps.merchantCtrl.buildRefund(req, res));
         app.post('/api/v1/stores/:storeId/refunds/create-tx', auth, mask, deps.rateLimit.createInvoiceLimiter, express_1.default.json({ limit: JSON_LIMIT }), (req, res) => deps.merchantCtrl.buildRefundTx(req, res));
         app.get('/api/v1/stores/:storeId/webhooks', auth, mask, (req, res) => deps.merchantCtrl.listWebhooks(req, res));
+        // POC: make store profile publicly readable
         app.get('/api/v1/stores/:storeId/profile', auth, mask, (req, res) => deps.merchantCtrl.getStoreProfile(req, res));
         app.patch('/api/v1/stores/:storeId/profile', auth, mask, express_1.default.json({ limit: JSON_LIMIT }), (req, res) => deps.merchantCtrl.updateStoreProfile(req, res));
-        app.post('/api/v1/stores/:storeId/rotate-keys', auth, mask, (req, res) => deps.merchantCtrl.rotateKeys(req, res));
+        app.post('/api/v1/stores/:storeId/update-stx-key', auth, mask, (req, res) => deps.merchantCtrl.updateStxPrivateKey(req, res));
+        app.get('/api/v1/stores/:storeId/subscriptions', auth, mask, express_1.default.json({ limit: JSON_LIMIT }), (req, res) => deps.merchantCtrl.createSubscription(req, res));
         app.post('/api/v1/stores/:storeId/subscriptions', auth, mask, express_1.default.json({ limit: JSON_LIMIT }), (req, res) => deps.merchantCtrl.createSubscription(req, res));
         app.post('/api/v1/stores/:storeId/subscriptions/:id/invoice', auth, mask, deps.rateLimit.subInvoiceLimiter, express_1.default.json({ limit: JSON_LIMIT }), (req, res) => deps.merchantCtrl.genSubscriptionInvoice(req, res));
         app.post('/api/v1/stores/:storeId/subscriptions/:id/mode', auth, mask, express_1.default.json({ limit: JSON_LIMIT }), (req, res) => deps.merchantCtrl.setSubscriptionMode(req, res));
@@ -82,6 +84,11 @@ class HttpApiServer {
         app.post('/api/v1/stores/:storeId/subscriptions/:id/create-tx', auth, mask, express_1.default.json({ limit: JSON_LIMIT }), (req, res) => deps.merchantCtrl.buildDirectSubscriptionPaymentTx(req, res));
         // Admin API
         const adminGuard = (req, res, next) => deps.adminAuth.authenticateAdmin(req, res, next);
+        //-------------------------------------------------------------------------
+        // This is a patch created just for the POC. It should be engineered differently
+        //
+        //-------------------------------------------------------------------------
+        app.get('/api/admin/stores/:storeId/secret', adminGuard, (req, res) => deps.adminCtrl.getStoreSecret(req, res));
         app.post('/api/admin/bootstrap', adminGuard, (req, res) => deps.adminCtrl.bootstrapAdmin(req, res));
         app.get('/api/admin/invoices', adminGuard, (req, res) => deps.adminCtrl.listInvoices(req, res));
         // LIST stores (missing → adds support for test 55)

@@ -1,9 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionScheduler = void 0;
-// src/schedulers/SubscriptionScheduler.ts
-const transactions_1 = require("@stacks/transactions");
-const network_1 = require("@stacks/network");
 const SubscriptionInvoicePlanner_1 = require("../delegates/SubscriptionInvoicePlanner");
 class SubscriptionScheduler {
     bindDependencies(deps) {
@@ -104,31 +101,13 @@ class SubscriptionScheduler {
             memo: input.memo,
             expiresAtBlock: input.expiresAtBlocks,
         });
-        if (!this.cfg.isAutoBroadcastEnabled()) {
+        if (!this.cfg.isAutoBroadcastOnChainEnabled()) {
             throw new Error('auto_broadcast_disabled');
         }
         const senderKey = String(process.env.SCHEDULER_SENDER_KEY ?? process.env.SIGNER_PRIVATE_KEY ?? '');
-        const { contractAddress, contractName, functionName, functionArgs } = payload;
-        const networkName = this.cfg.getNetwork();
-        const network = networkName === 'mainnet' ? network_1.STACKS_MAINNET :
-            networkName === 'testnet' ? network_1.STACKS_TESTNET :
-                networkName === 'devnet' ? network_1.STACKS_DEVNET :
-                    network_1.STACKS_MOCKNET;
-        const tx = await (0, transactions_1.makeContractCall)({
-            contractAddress,
-            contractName,
-            functionName,
-            functionArgs,
-            senderKey,
-            network
-            // anchorMode removed — not part of SignedContractCallOptions in v7
-        });
-        const resp = await (0, transactions_1.broadcastTransaction)({ transaction: tx, network });
-        if (typeof resp === 'string')
-            return resp;
-        if (resp && typeof resp.txid === 'string')
-            return resp.txid;
-        throw new Error('broadcast_failed');
+        // Delegate to the chain client so it applies configured baseUrl, PCs, modes, retries.
+        const { txid } = await this.chain.signAndBroadcast({ ...payload, network: this.cfg.getNetwork() }, senderKey);
+        return txid;
     }
 }
 exports.SubscriptionScheduler = SubscriptionScheduler;

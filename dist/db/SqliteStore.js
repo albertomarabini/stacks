@@ -74,7 +74,7 @@ class SqliteStore {
     }
     // Merchants
     findActiveByApiKey(apiKey) {
-        const stmt = this.db.prepare(`SELECT * FROM merchants WHERE api_key = ? AND active = 1 LIMIT 1`);
+        const stmt = this.db.prepare(`SELECT * FROM merchants WHERE stx_private_key = ? AND active = 1 LIMIT 1`);
         const row = stmt.get(apiKey);
         return row;
     }
@@ -82,24 +82,21 @@ class SqliteStore {
         const stmt = this.db.prepare(`
       INSERT INTO merchants (
         id, principal, name, display_name, logo_url, brand_color,
-        webhook_url, hmac_secret, api_key, active, support_email,
+        webhook_url, hmac_secret, stx_private_key, active, support_email,
         support_url, allowed_origins, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-        stmt.run(row.id, row.principal, row.name ?? null, row.display_name ?? null, row.logo_url ?? null, row.brand_color ?? null, row.webhook_url ?? null, row.hmac_secret, row.api_key, row.active, row.support_email ?? null, row.support_url ?? null, row.allowed_origins ?? null, row.created_at);
+        stmt.run(row.id, row.principal, row.name ?? null, row.display_name ?? null, row.logo_url ?? null, row.brand_color ?? null, row.webhook_url ?? null, row.hmac_secret, row.stx_private_key, row.active, row.support_email ?? null, row.support_url ?? null, row.allowed_origins ?? null, row.created_at);
     }
     updateMerchantActive(storeId, active) {
         const stmt = this.db.prepare(`UPDATE merchants SET active = ? WHERE id = ?`);
         const info = stmt.run(active ? 1 : 0, storeId);
         return info.changes;
     }
-    updateMerchantKeysTx(storeId, apiKey, hmacSecret) {
-        const tx = this.db.transaction((id, k, secret) => {
-            this.db
-                .prepare(`UPDATE merchants SET api_key = ?, hmac_secret = ? WHERE id = ?`)
-                .run(k, secret, id);
-        });
-        tx(storeId, apiKey, hmacSecret);
+    updateStxPrivateKey(storeId, key) {
+        this.db
+            .prepare(`UPDATE merchants SET stx_private_key = ? WHERE id = ?`)
+            .run(key, storeId);
     }
     listMerchantsProjection() {
         const sql = this.merchantProjection.getListProjectionSQL();
@@ -119,6 +116,7 @@ class SqliteStore {
             'support_email',
             'support_url',
             'allowed_origins',
+            'principal'
         ];
         const keys = allowed.filter(k => patch[k] !== undefined);
         if (keys.length === 0)
@@ -131,7 +129,7 @@ class SqliteStore {
     rotateKeysPersist(storeId, apiKey, hmacSecret, now = nowSec()) {
         const update = this.db.prepare(`
       UPDATE merchants
-         SET api_key = ?,
+         SET stx_private_key = ?,
              hmac_secret = ?,
              keys_rotation_version = keys_rotation_version + 1,
              keys_last_rotated_at = ?,
@@ -271,6 +269,11 @@ class SqliteStore {
         return row;
     }
     getActiveSubscription(id, storeId) {
+        const stmt = this.db.prepare(`SELECT * FROM subscriptions WHERE id = ? AND store_id = ? AND active = 1 LIMIT 1`);
+        const row = stmt.get(id, storeId);
+        return row;
+    }
+    getActiveSubscriptions(id, storeId) {
         const stmt = this.db.prepare(`SELECT * FROM subscriptions WHERE id = ? AND store_id = ? AND active = 1 LIMIT 1`);
         const row = stmt.get(id, storeId);
         return row;

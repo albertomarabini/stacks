@@ -99,11 +99,26 @@ class AdminApiController {
         this.builder = deps.builder;
         this.dispatcher = deps.dispatcher;
         this.pollerBridge = deps.pollerBridge;
+        this.cfg = deps.cfg;
     }
     async bootstrapAdmin(req, res) {
         const callRaw = this.builder.buildBootstrapAdmin(); // add this builder if missing
         const call = this.normalizeUnsignedCall(callRaw);
         res.json({ call });
+    }
+    // POC ONLY: expose hmacSecret via admin channel
+    // guardrails: do not log the secret, do not include in any views/hydration
+    async getStoreSecret(req, res) {
+        const storeId = String(req.params.storeId || '');
+        this.paramGuard.assertUuid(storeId);
+        const row = this.store.getMerchantById(storeId);
+        if (!row) {
+            res.status(404).end();
+            return;
+        }
+        // Never log secrets; mark as no-store
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        res.json({ hmacSecret: row.hmac_secret });
     }
     async createStore(req, res) {
         try {
@@ -154,14 +169,14 @@ class AdminApiController {
             res.status(409).json({ error: 'already-rotated' });
             return;
         }
-        const apiKey = (0, node_crypto_1.randomBytes)(32).toString('hex');
+        const apiKey = this.cfg.getAdminToken();
         const hmacSecret = (0, node_crypto_1.randomBytes)(32).toString('hex');
-        const version = this.store.rotateKeysPersist(storeId, apiKey, hmacSecret, now);
-        const marked = this.store.markKeysRevealedOnce(storeId, version, now);
-        if (!marked) {
-            res.status(409).json({ error: 'already-revealed' });
-            return;
-        }
+        // const version = this.store.rotateKeysPersist(storeId, apiKey, hmacSecret, now);
+        // const marked = this.store.markKeysRevealedOnce(storeId, version, now);
+        // if (!marked) {
+        //   res.status(409).json({ error: 'already-revealed' });
+        //   return;
+        // }
         res.status(200).json({ apiKey, hmacSecret });
     }
     // Normalize calls before JSON to avoid BigInt and match typed-arg shape.

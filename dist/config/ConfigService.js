@@ -32,8 +32,17 @@ class ConfigService {
     getPriceApiUrl() {
         return this.snap.priceApiUrl;
     }
-    isAutoBroadcastEnabled() {
-        return this.snap.autoBroadcast;
+    isAutoBroadcastOnChainEnabled() {
+        return this.snap.autoBroadcastOnChain;
+    }
+    getServerSignerPrivKey() {
+        return this.snap.serverSignerPrivKey;
+    }
+    getAdminToken() {
+        return this.snap.adminToken;
+    }
+    getHiroAPIKey() {
+        return this.snap.HiroAPIKey;
     }
 }
 exports.ConfigService = ConfigService;

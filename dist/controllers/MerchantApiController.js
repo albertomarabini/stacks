@@ -14,11 +14,64 @@ const InvoiceIdGuard_1 = require("../delegates/InvoiceIdGuard");
 const PayInvoiceTxAssembler_1 = require("../delegates/PayInvoiceTxAssembler");
 const stacks_pay_1 = require("stacks-pay");
 const json_safe_1 = require("../utils/json-safe");
+class BroadcastFailed extends Error {
+    constructor(message, cause) {
+        super(message);
+        this.cause = cause;
+        this.status = 502;
+        this.code = 'broadcast_failed';
+    }
+}
 class MerchantApiController {
     jsonSafe(obj) {
         if (obj === undefined)
             return undefined;
         return JSON.parse(JSON.stringify(obj, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+    }
+    // MerchantApiController.ts (inside class)
+    async ensureInvoiceOnChain(rowWithStore, store) {
+        const idHex = String(rowWithStore?.id_hex || rowWithStore?.invoice_id_hex || '').toLowerCase();
+        if (!idHex)
+            throw new BroadcastFailed('missing_invoice_id_hex');
+        // Fast path: if it exists already, no-op
+        const status = await this.chain.readInvoiceStatus(idHex).catch(() => 'not-found');
+        if (status !== 'not-found')
+            return {};
+        // Build a minimal create-invoice call (contract enforces everything else)
+        const unsignedCreate = this.builder.buildCreateInvoice({
+            idHex,
+            amountSats: Number(rowWithStore?.amount_sats ?? rowWithStore?.amountSats ?? rowWithStore?.amount),
+            memo: rowWithStore?.memo ?? undefined,
+            // expiresAt optional – if you track a block-height, pass it here
+        });
+        const { txid } = await this.mustBroadcast(unsignedCreate, store);
+        return { created: true, txid };
+    }
+    async mustBroadcast(unsigned, store) {
+        // hard gate
+        if (!this.cfg.isAutoBroadcastOnChainEnabled()) {
+            throw new BroadcastFailed('autobroadcast_disabled');
+        }
+        const signer = store.stx_private_key || process.env.SIGNER_PRIVATE_KEY || '';
+        if (!signer) {
+            throw new BroadcastFailed('missing_signer_key');
+        }
+        try {
+            const { txid } = await this.chain.signAndBroadcast(unsigned, signer);
+            if (!txid)
+                throw new BroadcastFailed('no_txid_returned');
+            return { txid };
+        }
+        catch (e) {
+            // surface precise reason; do not swallow
+            const detail = e?.message ||
+                e?.result?.reason ||
+                e?.result?.error ||
+                'unknown_broadcast_error';
+            // (Optionally log)
+            console.warn('[autobroadcast_failed]', { detail, result: e?.result });
+            throw new BroadcastFailed(`broadcast_failed: ${detail}`, e);
+        }
     }
     bindDependencies(deps) {
         this.store = deps.store;
@@ -62,7 +115,7 @@ class MerchantApiController {
             args: Array.isArray(unsigned?.functionArgs) ? unsigned.functionArgs : [],
             postConditions: unsigned?.postConditions ?? [],
             postConditionMode: String(unsigned?.postConditionMode ?? 'deny'),
-            network: unsigned?.network ?? 'mainnet',
+            network: unsigned?.network ?? this.cfg.getNetwork(),
         };
     }
     async getInvoice(req, res) {
@@ -119,18 +172,28 @@ class MerchantApiController {
             res.status(409).json({ error: 'not_cancellable' });
             return;
         }
-        // Flip mirror NOW so public /create-tx will block immediately after this call
+        // Build unsigned on-chain cancel call
         this.codec.assertHex64(invRow.id_hex);
-        this.store.markInvoiceCanceled(invRow.id_hex);
-        // Re-read to ensure it took effect
-        const after = this.store.invoices.findByStoreAndIdRaw(sreq.store.id, idRaw);
-        if (!after || after.status !== 'canceled') {
-            res.status(409).json({ error: 'not_cancellable' });
-            return;
-        }
-        // Still return the unsigned on-chain cancel call so the client can broadcast it
         const unsignedCall = this.builder.buildCancelInvoice({ idHex: invRow.id_hex });
-        res.json({ canceled: true, unsignedCall, unsignedPayload: unsignedCall });
+        // If autobroadcast is enforced, broadcast and fail hard on errors
+        try {
+            const { txid } = await this.mustBroadcast(unsignedCall, sreq.store);
+            // Only flip mirror *after* broadcast success
+            this.store.markInvoiceCanceled(invRow.id_hex);
+            const after = this.store.invoices.findByStoreAndIdRaw(sreq.store.id, idRaw);
+            if (!after || after.status !== 'canceled') {
+                res.status(409).json({ error: 'not_cancellable' });
+                return;
+            }
+            res.json({ canceled: true, txid, unsignedCall });
+        }
+        catch (e) {
+            if (e instanceof BroadcastFailed) {
+                res.status(e.status).json({ error: e.code, detail: e.message });
+                return;
+            }
+            throw e;
+        }
     }
     // ─────────────────────────────────────────────────────────────────────────────
     // CANCEL (action): flips mirror row to canceled (fallback path in the test)
@@ -161,14 +224,41 @@ class MerchantApiController {
         }
         res.json({ canceled: true, invoiceId: idRaw });
     }
+    // async getStoreProfile(req: Request, res: Response): Promise<void> {
+    //   const sreq = req as AuthedRequest;
+    //   const dto = this.dtoMapper.storeToPrivateProfile(sreq.store);
+    //   res.json({
+    //     ...dto,
+    //     apiKey: sreq.store.stx_private_key ?? null,
+    //     hmacSecret: sreq.store.hmac_secret ?? null,
+    //   });
+    // }
+    // src/controllers/MerchantApiController.ts
+    // src/controllers/MerchantApiController.ts
     async getStoreProfile(req, res) {
-        const sreq = req;
-        const dto = this.dtoMapper.storeToPrivateProfile(sreq.store);
-        res.json({
-            ...dto,
-            apiKey: sreq.store.api_key ?? null,
-            hmacSecret: sreq.store.hmac_secret ?? null,
-        });
+        // If the route is public (no auth), req.store is undefined.
+        const storeId = String(req.params.storeId || '');
+        const authed = !!req.store;
+        // If authed, use the authenticated store (enjoy mask guarantees)
+        if (authed) {
+            const sreq = req;
+            const dto = this.dtoMapper.storeToPrivateProfile(sreq.store);
+            res.json({
+                ...dto,
+                stxPrivateKey: sreq.store.stx_private_key ?? null,
+                hmacSecret: sreq.store.hmac_secret ?? null,
+            });
+            return;
+        }
+        // Public path: fetch from DB and emit a PUBLIC profile
+        const row = this.store.getMerchantById(storeId);
+        if (!row) {
+            res.status(404).end();
+            return;
+        }
+        // Use the public/profile-shape mapper (no secrets)
+        const publicDto = this.dtoMapper.storeToPrivateProfile(row);
+        res.json(publicDto);
     }
     async updateStoreProfile(req, res) {
         const sreq = req;
@@ -183,6 +273,7 @@ class MerchantApiController {
             support_email: 'support_email', supportEmail: 'support_email',
             support_url: 'support_url', supportUrl: 'support_url',
             allowed_origins: 'allowed_origins', allowedOrigins: 'allowed_origins',
+            principal: 'principal'
         };
         const patch = {};
         for (const [k, v] of Object.entries(map)) {
@@ -198,12 +289,15 @@ class MerchantApiController {
             }
         }
         this.store.updateMerchantProfile(sreq.store.id, patch);
+        if (inb["stx_private_key"]) {
+            this.store.updateStxPrivateKey(sreq.store.id, inb["stx_private_key"]);
+        }
         const updated = this.store.getMerchantById(sreq.store.id);
         const dto = this.dtoMapper.storeToPrivateProfile(updated);
         // include secrets in PATCH response too (test expects them)
         res.json({
             ...dto,
-            apiKey: updated?.api_key ?? null,
+            apiKey: updated?.stx_private_key ?? null,
             hmacSecret: updated?.hmac_secret ?? null,
         });
     }
@@ -308,8 +402,18 @@ class MerchantApiController {
             }
             // The RefundService already enforces refund cap and requires merchantPrincipal
             const unsigned = await this.refund.buildRefundPayload(sreq.store, invRow, amountSats, memo);
-            // Return the unsigned call — this is what the test expects to broadcast
-            res.json(this.jsonSafe(unsigned));
+            // Enforce autobroadcast when enabled
+            try {
+                const { txid } = await this.mustBroadcast(unsigned, sreq.store);
+                res.json(this.jsonSafe({ txid, unsignedCall: unsigned }));
+            }
+            catch (e) {
+                if (e instanceof BroadcastFailed) {
+                    res.status(e.status).json({ error: e.code, detail: e.message });
+                    return;
+                }
+                throw e;
+            }
         }
         catch {
             // Validation-style failures → 400 per Steroids
@@ -320,10 +424,10 @@ class MerchantApiController {
     validateRefundBody(body) {
         return this.inputValidator.validateRefundBody(body);
     }
-    async rotateKeys(req, res) {
+    async updateStxPrivateKey(req, res) {
         const sreq = req;
         const { apiKey, hmacSecret } = this.generateSecrets();
-        this.store.updateMerchantKeysTx(sreq.store.id, apiKey, hmacSecret);
+        this.store.updateStxPrivateKey(sreq.store.id, apiKey);
         res.json({ apiKey, hmacSecret });
     }
     generateSecrets() {
@@ -392,9 +496,24 @@ class MerchantApiController {
                 lastPaidInvoiceId: row.last_paid_invoice_id,
                 mode: row.mode,
             };
-            if (unsignedCall)
+            if (!unsignedCall) {
+                res.json(resp);
+                return;
+            }
+            // When autobroadcast is enabled, publish and return txid
+            try {
+                const { txid } = await this.mustBroadcast(unsignedCall, sreq.store);
+                resp.txid = txid;
                 resp.unsignedCall = this.jsonSafe(unsignedCall);
-            res.json(resp);
+                res.json(resp);
+            }
+            catch (e) {
+                if (e instanceof BroadcastFailed) {
+                    res.status(e.status).json({ error: e.code, detail: e.message });
+                    return;
+                }
+                throw e;
+            }
         }
         catch {
             res.status(400).json({ error: 'validation_error' });
@@ -443,6 +562,20 @@ class MerchantApiController {
                 memo,
                 webhookUrl,
             });
+            try {
+                // If your `invoice` object doesn’t carry id_hex, compute it from invoiceId (already hex).
+                const invRow = this.store.getInvoiceWithStore(invoice.invoiceId);
+                if (!invRow) {
+                    return void res.status(404).json({ error: 'not_found' });
+                }
+                await this.ensureInvoiceOnChain(invRow, sreq.store);
+            }
+            catch (e) {
+                if (e instanceof BroadcastFailed) {
+                    return void res.status(e.status).json({ error: e.code, detail: e.message });
+                }
+                throw e;
+            }
             const magicLink = `/i/${invoice.invoiceId}`;
             res.json({ invoice, magicLink, unsignedCall: this.jsonSafe(unsignedCall) });
         }
@@ -498,9 +631,23 @@ class MerchantApiController {
         }
         const out = await this.subs.setMode(sub, mode);
         const resp = { id: out.row.id, mode: out.row.mode };
-        if (out.unsignedCall)
+        if (!out.unsignedCall) {
+            res.json(resp);
+            return;
+        }
+        try {
+            const { txid } = await this.mustBroadcast(out.unsignedCall, sreq.store);
+            resp.txid = txid;
             resp.unsignedCall = this.jsonSafe(out.unsignedCall);
-        res.json(resp);
+            res.json(resp);
+        }
+        catch (e) {
+            if (e instanceof BroadcastFailed) {
+                res.status(e.status).json({ error: e.code, detail: e.message });
+                return;
+            }
+            throw e;
+        }
     }
     async cancelSubscription(req, res) {
         const sreq = req;
@@ -511,7 +658,17 @@ class MerchantApiController {
             return;
         }
         const out = await this.subs.cancel(sub);
-        res.json({ unsignedCall: this.jsonSafe(out.unsignedCall) });
+        try {
+            const { txid } = await this.mustBroadcast(out.unsignedCall, sreq.store);
+            res.json({ txid, unsignedCall: this.jsonSafe(out.unsignedCall) });
+        }
+        catch (e) {
+            if (e instanceof BroadcastFailed) {
+                res.status(e.status).json({ error: e.code, detail: e.message });
+                return;
+            }
+            throw e;
+        }
     }
     async listWebhooks(req, res) {
         // guard: missing auth should be clean 401
@@ -555,6 +712,16 @@ class MerchantApiController {
                 res.status(404).json({ error: 'not_found' });
                 return;
             }
+            // if (this.cfg.isAutoBroadcastOnChainEnabled()) {
+            //   try {
+            //     await this.ensureInvoiceOnChain(row, sreq.store);
+            //   } catch (e) {
+            //     if (e instanceof BroadcastFailed) {
+            //       return void res.status(e.status).json({ error: e.code, detail: e.message });
+            //     }
+            //     throw e;
+            //   }
+            // }
             // 2) Build unsigned pay-invoice call (with fungible PCs)
             //    Harden: block when sBTC token isn't configured (422 like other builders)
             if (!this.cfg.getSbtcContractId()) {

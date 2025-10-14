@@ -105,6 +105,29 @@ class PaymentPoller {
             this.refreshMetrics(); // update lastRunAt even on failure
         });
     }
+    // private async observePendingBroadcasts(): Promise<void> {
+    //   // [MISSING] replace with your actual store read:
+    //   const pending = this.store.selectPendingInvoiceBroadcasts?.() as Array<{ invoice_id: string; txid: string }> | undefined;
+    //   if (!pending || !pending.length) return;
+    //   for (const row of pending) {
+    //     try {
+    //       const tx = await (this.chain as any).getTxStatus(row.txid);
+    //       const s = String(tx?.tx_status || '').toLowerCase();
+    //       if (s === 'abort_by_response' || s === 'failed' || s.startsWith('dropped')) {
+    //         // [MISSING] store hook to annotate failure and clear pending
+    //         this.store.setInvoiceBroadcastFailed?.({ invoiceId: row.invoice_id, txid: row.txid, reason: s });
+    //       }
+    //       if (s === 'success') {
+    //         // Don’t mark paid here — let normal on-chain reads/events flip state.
+    //         // Just clear pending so UI can show “mining/confirming”.
+    //         this.store.clearInvoiceBroadcastPending?.({ invoiceId: row.invoice_id, txid: row.txid });
+    //       }
+    //       // if s === 'pending' → do nothing
+    //     } catch {
+    //       // swallow transient reader errors
+    //     }
+    //   }
+    // }
     async startPoller() {
         const saved = this.store.getPollerCursor() ??
             null;
@@ -147,9 +170,17 @@ class PaymentPoller {
         let tipHeight = 0;
         try {
             const { tipHeight: th, tipBlockHash, cursorRef } = await this.readChainTip();
+            const { contractAddress, contractName } = this.cfg.getContractId();
+            console.debug('[POLLER:TICK]', {
+                from: this.rewindToHeight !== undefined ? this.rewindToHeight : (this.cursor.lastHeight + 1),
+                cursorLastHeight: this.cursor.lastHeight,
+                tipHeight,
+                contract: `${contractAddress}.${contractName}`,
+            });
             tipHeight = th;
             const fromHeight = this.rewindToHeight !== undefined ? this.rewindToHeight : cursorRef.lastHeight + 1;
             const batch = await this.fetchAndFilterEvents(fromHeight);
+            console.debug('[POLLER:BATCH]', { count: batch.length, sample: batch.slice(0, 3) });
             const { minConfirmations } = this.cfg.getPollingConfig();
             await this.processSubscriptionEvents(batch, tipHeight, minConfirmations);
             for (const e of batch) {
@@ -158,6 +189,7 @@ class PaymentPoller {
             const unpaidStatuses = ['unpaid'];
             const unpaidRows = this.store.selectAdminInvoices(unpaidStatuses);
             const candidateHexes = unpaidRows.map((r) => r.id_hex);
+            // await this.observePendingBroadcasts();
             await this.expirations.sweepOnchainStatuses(candidateHexes, {
                 store: this.store,
                 chain: this.chain,
@@ -171,6 +203,7 @@ class PaymentPoller {
                 return;
             }
             const lastTxId = batch.length ? batch[batch.length - 1].tx_id : undefined;
+            // console.debug(`[tick:done] ${batch.length} evts, ${fromHeight}, ${tipHeight}`);
             await this.updateCursorState({ height: tipHeight, blockHash: tipBlockHash, parentHash: '' }, lastTxId, tipHeight);
             this.rewindToHeight = undefined;
         }

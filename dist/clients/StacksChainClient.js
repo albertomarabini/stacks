@@ -40,7 +40,6 @@ exports.StacksChainClient = void 0;
 // src/clients/StacksChainClient.ts
 const axios_1 = __importDefault(require("axios"));
 const transactions_1 = require("@stacks/transactions");
-const transactions_2 = require("@stacks/transactions");
 const stacksNetworkPkg = __importStar(require("@stacks/network"));
 const Net = stacksNetworkPkg.default ?? stacksNetworkPkg;
 const { networkFromName } = Net;
@@ -81,16 +80,12 @@ class StacksChainClient {
     constructor(cfg) {
         //DEBUG: DO NOT TOUCH THIS!
         this.debug = String(process.env.GLOBAL_DEBUGGING || '') === '1';
-        // private dlog = (...a: any[]) => { if (this.debug) console.log('[CHAIN]', ...a); };
-        this.dlog = (...a) => { return; };
+        this.dlog = (..._a) => { return; };
         // Independent fold streams: HTTP vs CHAIN
         this.foldHTTP = new DuoCoalescer(line => this.dlog(line));
         this.foldCHAIN = new DuoCoalescer(line => this.dlog(line));
         this.initializeNetwork(cfg);
         this.probeExtendedApi().catch(() => { });
-        // if (this.debug) {
-        //   process.once('beforeExit', () => { this.foldHTTP.flushAll(); this.foldCHAIN.flushAll(); });
-        // }
     }
     short(hexLike, n = 8) {
         const s = String(hexLike || '').replace(/^0x/, '');
@@ -133,52 +128,172 @@ class StacksChainClient {
         if (t === 'false')
             return (0, transactions_1.falseCV)();
         if (t === 'address')
-            return transactions_2.Cl.standardPrincipal(String(a.value)); // supported in your codebase
+            return (0, transactions_1.standardPrincipalCV)(String(a.value));
         // Already CV-shaped? pass through
         if ('value' in a && 'type' in a)
             return a;
         throw new Error(`cvFromTyped: unsupported type ${t}`);
     }
-    // Sign + broadcast a contract call
-    async signAndBroadcast(unsigned, senderKeyHex) {
-        const args = (unsigned.functionArgs || []).map(x => this.cvFromTyped(x));
-        // Build a network that points at the same Core API we already use
-        const net = networkFromName(this.network);
-        net.coreApiUrl = this.baseUrl;
-        const tx = await (0, transactions_1.makeContractCall)({
-            contractAddress: unsigned.contractAddress,
-            contractName: unsigned.contractName,
-            functionName: unsigned.functionName,
-            functionArgs: args,
-            senderKey: senderKeyHex.replace(/^0x/i, '').slice(0, 64),
-            network: net,
-            // do NOT put anchorMode here (your type set rejects it).
-        });
-        // NOTE: object form — this fixes your TS error
-        const res = await (0, transactions_1.broadcastTransaction)({ transaction: tx, network: net });
-        if (res?.error) {
-            // surfaces chain aborts (u-codes) back to caller
-            const reason = res?.reason || res?.error;
-            throw new Error(`broadcast failed: ${typeof reason === 'string' ? reason : JSON.stringify(res)}`);
+    // Map string -> enum for AnchorMode/PostConditionMode
+    toAnchorMode(s) {
+        const t = String(s || '').toLowerCase();
+        if (t === 'on_chain_only' || t === 'onchain' || t === 'onchainonly')
+            return transactions_1.AnchorMode.OnChainOnly;
+        if (t === 'off_chain_only' || t === 'offchain' || t === 'offchainonly')
+            return transactions_1.AnchorMode.OffChainOnly;
+        return transactions_1.AnchorMode.Any; // default
+    }
+    toPostConditionMode(s) {
+        return String(s || '').toLowerCase() === 'allow' ? transactions_1.PostConditionMode.Allow : transactions_1.PostConditionMode.Deny;
+    }
+    // Add near other helpers
+    async getTxStatus(txid) {
+        const id = String(txid || '').toLowerCase();
+        if (!/^[0-9a-f]{64}$/.test(id))
+            throw new Error('bad txid');
+        return await this.getWithRetry(`/extended/v1/tx/${id}`);
+    }
+    // Parse "ST...contract::asset" -> { addr, name, asset }
+    parseFtAsset(fq) {
+        const [left, right] = String(fq).split('.', 2);
+        const [name, asset] = String(right || '').split('::', 2);
+        if (!left || !name || !asset)
+            throw new Error(`bad FT asset identifier: ${fq}`);
+        return { addr: left, name, asset };
+    }
+    // Convert builder-shaped PCs to v7 Pc instances (TS-safe)
+    pcsFromUnsigned(unsigned) {
+        const raw = unsigned?.postConditions || unsigned?.post_conditions || [];
+        const out = [];
+        for (const pc of raw) {
+            if (!pc || typeof pc !== 'object')
+                continue;
+            const cond = String(pc.condition || '').toLowerCase();
+            const amt = BigInt(String(pc.amount ?? 0));
+            const who = String(pc.address || '');
+            const codeStage = ((principal) => {
+                switch (cond) {
+                    case 'eq': return principal.willSendEq(amt);
+                    case 'gt': return principal.willSendGt(amt);
+                    case 'gte': return principal.willSendGte(amt);
+                    case 'lt': return principal.willSendLt(amt);
+                    case 'lte':
+                    default: return principal.willSendLte(amt);
+                }
+            })(transactions_1.Pc.principal(who));
+            if (pc.type === 'stx-postcondition') {
+                out.push(codeStage.ustx());
+                continue;
+            }
+            if (pc.type === 'ft-postcondition') {
+                const { addr, name, asset } = this.parseFtAsset(String(pc.asset || ''));
+                out.push(codeStage.ft(`${addr}.${name}`, asset));
+                continue;
+            }
+            // (nft PCs etc. — add as needed)
         }
-        const txid = String(res?.txId || res?.txid || res);
+        return out;
+    }
+    // Sign + broadcast a contract call (honors PCs/network)
+    // async signAndBroadcast(
+    //   unsigned: {
+    //     contractAddress: string;
+    //     contractName: string;
+    //     functionName: string;
+    //     functionArgs?: any[];
+    //     postConditions?: any[];
+    //     post_conditions?: any[];
+    //     postConditionMode?: 'allow' | 'deny';
+    //     post_condition_mode?: 'allow' | 'deny';
+    //     anchorMode?: AnchorCase;
+    //     network?: NetworkName;
+    //   },
+    //   senderKeyHex: string,
+    // ): Promise<{ txid: string }> {
+    //   const args: ClarityValue[] = (unsigned.functionArgs || []).map(x => this.cvFromTyped(x));
+    //   // pick network from unsigned if present; fallback to client default
+    //   const netName = (unsigned.network as any) || this.network;
+    //   const net = (Net as any).networkFromName ? (Net as any).networkFromName(netName) : networkFromName(netName);
+    //   (net as any).client = (net as any).client ?? {};
+    //   (net as any).client.baseUrl = this.baseUrl;
+    //   if (this.debug) this.foldCHAIN.push('NET', `[NET] baseUrl=${(net as any).client.baseUrl}`);
+    //   const postConditions = this.pcsFromUnsigned(unsigned);
+    //   const postConditionMode =
+    //     this.toPostConditionMode(unsigned.postConditionMode || (unsigned as any).post_condition_mode);
+    //   // Accept both camel & snake; convert once here
+    //   const anchorModeNorm = String(unsigned.anchorMode || 'any').toLowerCase();
+    //   const anchorMode =
+    //     anchorModeNorm === 'on_chain_only' || anchorModeNorm === 'onchainonly' || anchorModeNorm === 'onchain'
+    //       ? AnchorMode.OnChainOnly
+    //       : anchorModeNorm === 'off_chain_only' || anchorModeNorm === 'offchainonly' || anchorModeNorm === 'offchain'
+    //       ? AnchorMode.OffChainOnly
+    //       : AnchorMode.Any;
+    //   const tx = await makeContractCall({
+    //     contractAddress: unsigned.contractAddress,
+    //     contractName: unsigned.contractName,
+    //     functionName: unsigned.functionName,
+    //     functionArgs: args,
+    //     senderKey: senderKeyHex.replace(/^0x/i, '').slice(0, 64),
+    //     network: net,
+    //     postConditions,
+    //     postConditionMode,
+    //     // anchorMode is optional; omit unless you really require OffChainOnly/OnChainOnly
+    //   });
+    //   const res: any = await broadcastTransaction({ transaction: tx, network: net });
+    //   if (res?.error || res?.reason) {
+    //     const reason = res.reason || res.error;
+    //     throw Object.assign(
+    //       new Error(`broadcast failed: ${typeof reason === 'string' ? reason : JSON.stringify(res)}`),
+    //       { result: res }
+    //     );
+    //   }
+    //   const txid = String(res?.txid ?? res);
+    //   return { txid };
+    // }
+    // DO NOT import '@stacks/connect' at top-level (will break SSR/CJS)
+    // This file must only be imported in the browser (no ts-node/SSR).
+    async signAndBroadcast(unsigned, merchantAddress) {
+        // 0) Hard block server/SSR. If this throws at startup, this file is imported on the server.
+        if (typeof window === 'undefined') {
+            throw new Error('signAndBroadcast must run in the browser (wallet required). Move this call to client-only code.');
+        }
+        // 1) Dynamic import (ESM-safe). Prevents Node from require()-ing ESM on startup.
+        const { request } = await Promise.resolve().then(() => __importStar(require('@stacks/connect')));
+        // 2) Encode your existing args, then append merchant principal
+        const baseArgs = (unsigned.functionArgs || []).map((x) => this.cvFromTyped(x));
+        const argsWithMerchant = [...baseArgs, transactions_1.Cl.principal(merchantAddress)]; // address, not private key
+        // 3) Normalize post-conditions + mode (camel/snake)
+        const postConditions = (unsigned.postConditions ?? unsigned.post_conditions) || undefined;
+        const postConditionMode = (unsigned.postConditionMode ?? unsigned.post_condition_mode ?? 'deny');
+        // (Optional) You can build payer-safety post-conditions with Pc.* if needed. :contentReference[oaicite:5]{index=5}
+        // 4) Ask wallet to sign + broadcast
+        const res = await request('stx_callContract', {
+            contract: `${unsigned.contractAddress}.${unsigned.contractName}`,
+            functionName: unsigned.functionName,
+            functionArgs: argsWithMerchant,
+            ...(postConditions ? { postConditions } : {}),
+            postConditionMode, // 'allow' | 'deny'
+            network: unsigned.network ?? 'mainnet'
+        });
+        // 5) Normalize result and return
+        const txid = String(res?.txid ?? res?.txId ?? res);
+        if (!txid)
+            throw new Error(`wallet did not return txid: ${JSON.stringify(res)}`);
         return { txid };
     }
     // ────────────────────────────────────────────────────────────────────────────
     // Transport resiliency
     // ────────────────────────────────────────────────────────────────────────────
-    // broaden transientErr
     transientErr(e) {
         const code = e?.code || e?.response?.status;
         const msg = String(e?.message || '').toLowerCase();
         return (code === 'ECONNRESET' ||
             code === 'EPIPE' ||
             code === 'ETIMEDOUT' ||
-            code === 'ECONNABORTED' || // ← axios timeout code
+            code === 'ECONNABORTED' ||
             msg.includes('timeout') ||
             msg.includes('socket hang up'));
     }
-    // bump default retries a touch and backoff
     async getWithRetry(path, opts = {}, retries = 4) {
         let lastErr;
         const sleep = (ms) => new Promise(res => setTimeout(res, ms));
@@ -189,6 +304,20 @@ class StacksChainClient {
             }
             catch (e) {
                 lastErr = e;
+                const status = e?.response?.status;
+                const hdrs = e?.response?.headers || {};
+                if (status === 429) {
+                    // Prefer server-provided hints
+                    const retryAfter = Number(hdrs['retry-after']); // seconds
+                    const resetIn = Number(hdrs['x-ratelimit-reset']); // seconds
+                    const waitMs = Number.isFinite(retryAfter)
+                        ? retryAfter * 1000
+                        : Number.isFinite(resetIn)
+                            ? resetIn * 1000
+                            : 500 * Math.pow(2, i); // fallback exponential
+                    await sleep(waitMs);
+                    continue;
+                }
                 if (!this.transientErr(e) || i === retries)
                     throw e;
                 const backoff = 150 * Math.pow(2, i) + Math.floor(Math.random() * 200);
@@ -207,6 +336,19 @@ class StacksChainClient {
             }
             catch (e) {
                 lastErr = e;
+                const status = e?.response?.status;
+                const hdrs = e?.response?.headers || {};
+                if (status === 429) {
+                    const retryAfter = Number(hdrs['retry-after']);
+                    const resetIn = Number(hdrs['x-ratelimit-reset']);
+                    const waitMs = Number.isFinite(retryAfter)
+                        ? retryAfter * 1000
+                        : Number.isFinite(resetIn)
+                            ? resetIn * 1000
+                            : 500 * Math.pow(2, i);
+                    await sleep(waitMs);
+                    continue;
+                }
                 if (!this.transientErr(e) || i === retries)
                     throw e;
                 const backoff = 150 * Math.pow(2, i) + Math.floor(Math.random() * 200);
@@ -218,7 +360,7 @@ class StacksChainClient {
     // 2a) Fallback for contracts that use get-invoice-status-v2 { id: (buff 32) }
     async readInvoiceStatusV2Fallback(idHex) {
         const clean = idHex.toLowerCase().replace(/^0x/, '');
-        const key = (0, transactions_2.tupleCV)({ id: (0, transactions_1.bufferCV)(Buffer.from(clean, 'hex')) });
+        const key = (0, transactions_1.tupleCV)({ id: (0, transactions_1.bufferCV)(Buffer.from(clean, 'hex')) });
         const cv = await this.callReadOnly('get-invoice-status-v2', [key]);
         const j = (0, transactions_1.cvToJSON)(cv);
         const val = String(j?.value ?? '').toLowerCase();
@@ -229,31 +371,29 @@ class StacksChainClient {
     // ────────────────────────────────────────────────────────────────────────────
     initializeNetwork(cfg) {
         const net = cfg.getNetwork() ?? 'testnet';
-        const customApiUrl = cfg.getStacksApiBaseUrl?.() ??
-            cfg.getApiBaseUrl?.() ??
-            process.env.STACKS_API_URL ??
-            (net === 'mainnet'
-                ? 'https://api.hiro.so'
-                : net === 'testnet'
-                    ? 'https://api.testnet.hiro.so'
-                    : 'http://localhost:3999');
+        const customApiUrl = (net === 'mainnet'
+            ? 'https://api.hiro.so'
+            : net === 'testnet'
+                ? 'https://api.testnet.hiro.so'
+                : 'http://localhost:3999');
+        console.log(`[ChainClient] initialized on ${net} ${customApiUrl}`);
+        const apiKey = cfg.getHiroAPIKey();
         this.network = net;
         this.baseUrl = String(customApiUrl).replace(/\/+$/, '');
         this.http = axios_1.default.create({
             baseURL: this.baseUrl,
-            timeout: 20000, // give a bit more room
+            timeout: 20000,
             httpAgent: new node_http_1.default.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16 }),
             httpsAgent: new node_https_1.default.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16 }),
             maxRedirects: 5,
-            proxy: false, // ← disable env proxy auto-use if you don’t need it
+            proxy: false,
+            headers: apiKey ? { 'x-api-key': apiKey } : undefined,
         });
-        //DEBUGGING! DO NOT TOUCH THIS!
         this.http.interceptors.request.use(cfg => {
             cfg._t = Date.now();
             if (this.debug) {
                 const method = (cfg.method || 'GET').toUpperCase();
                 const path = this.pathOnly(cfg.url || '');
-                // Coalesce purely by method+path to avoid breaking the fold with bodies/params
                 this.foldHTTP.push(`REQ:${method}:${path}`, `→ ${method} ${path}`);
             }
             return cfg;
@@ -310,17 +450,12 @@ class StacksChainClient {
     }
     async callReadOnly(functionName, functionArgs) {
         const argsHex = (functionArgs ?? []).map(cv => (0, transactions_1.cvToHex)(cv));
-        const url = `/v2/contracts/call-read/${this.contractAddress}/${this.contractName}/${functionName}`;
+        const url = `/v2/contracts/call-read/${this.contractAddress}/${this.contractName}/${functionName}?proof=0`;
         const body = { sender: this.contractAddress, arguments: argsHex };
-        // if (this.debug) {
-        //   const head = argsHex.length ? `${this.short(argsHex[0], 10)}${argsHex.length>1?',…':''}` : '';
-        //   this.foldCHAIN.push(`RO-IN:${functionName}:${head}`, `[RO] → ${functionName}(${head})`);
-        // }
         const resp = await this.postWithRetry(url, body);
         const resultHex = String(resp?.result ?? '');
         if (!resultHex.startsWith('0x'))
             throw new Error(`callReadOnly: bad result for ${functionName}`);
-        // if (this.debug) this.foldCHAIN.push(`RO-OUT:${functionName}:ok`, `[RO] ← ${functionName} ok`);
         return (0, transactions_1.hexToCV)(resultHex);
     }
     /**
@@ -328,7 +463,6 @@ class StacksChainClient {
      */
     async readInvoice(idHex) {
         const clean = String(idHex || '').replace(/^0x/i, '').toLowerCase();
-        // Be lenient: don’t bail on weird type strings; only guard obviously bad ids.
         if (clean.length !== 64 || /[^0-9a-f]/i.test(clean))
             return undefined;
         const toNumU = (x) => {
@@ -341,12 +475,10 @@ class StacksChainClient {
             if (typeof x === 'string')
                 return Number(x.startsWith('u') ? x.slice(1) : x);
             if (typeof x === 'object') {
-                // Peel common CV JSON nodes
                 if ('value' in x)
                     return toNumU(x.value);
                 if ('repr' in x)
                     return toNumU(x.repr);
-                // last resort: try first field
                 const k = Object.keys(x)[0];
                 return k ? toNumU(x[k]) : NaN;
             }
@@ -383,7 +515,6 @@ class StacksChainClient {
             return [];
         };
         const get = (fields, k) => fields.find((x) => (x?.name ?? x?.key) === k)?.value;
-        // 1) try get-invoice
         try {
             const cv = await this.callReadOnly('get-invoice', [(0, transactions_1.bufferCV)(Buffer.from(clean, 'hex'))]);
             const tupleNode = unwrap((0, transactions_1.cvToJSON)(cv));
@@ -400,7 +531,7 @@ class StacksChainClient {
                 return v === true || v === 'true' || v === 'True' || v === 1 || v === '1';
             };
             const amountSats = toNumU(amountCV);
-            const refundAmount = refundCV == null ? 0 : toNumU(refundCV); // ← numeric
+            const refundAmount = refundCV == null ? 0 : toNumU(refundCV);
             let status = 'unpaid';
             if (truthy(paidCV))
                 status = 'paid';
@@ -408,7 +539,6 @@ class StacksChainClient {
                 status = 'canceled';
             else if (truthy(expiredCV))
                 status = 'expired';
-            // payer optional principal
             const payerCV = get(f, 'payer');
             let payer;
             if (payerCV && payerCV.type === 'optional' && payerCV.value) {
@@ -420,13 +550,12 @@ class StacksChainClient {
                 paidAtHeight: undefined,
                 lastChangeHeight: undefined,
                 lastTxId: undefined,
-                refundAmount, // ← plain number
-                amountSats, // ← plain number
+                refundAmount,
+                amountSats,
                 payer,
             };
         }
         catch { /* fall back */ }
-        // 2) fallback: map entry
         try {
             const j = await this.readInvoiceDirectMap(clean);
             if (!j)
@@ -442,7 +571,7 @@ class StacksChainClient {
                 return v === true || v === 'true' || v === 'True' || v === 1 || v === '1';
             };
             const amountSats = toNumU(amountCV);
-            const refundAmount = refundCV == null ? 0 : toNumU(refundCV); // ← numeric
+            const refundAmount = refundCV == null ? 0 : toNumU(refundCV);
             let status = 'unpaid';
             if (truthy(paidCV))
                 status = 'paid';
@@ -455,8 +584,8 @@ class StacksChainClient {
                 paidAtHeight: undefined,
                 lastChangeHeight: undefined,
                 lastTxId: undefined,
-                refundAmount, // ← plain number
-                amountSats, // ← plain number
+                refundAmount,
+                amountSats,
                 payer: undefined,
             };
         }
@@ -472,18 +601,14 @@ class StacksChainClient {
             const cv = await this.callReadOnly('get-invoice-status', [(0, transactions_1.bufferCV)(Buffer.from(clean, 'hex'))]);
             const j = (0, transactions_1.cvToJSON)(cv);
             const val = String(j?.value ?? '').toLowerCase();
-            if (val) {
-                // if (this.debug) this.foldCHAIN.push(`STAT:${this.short(clean)}:${val}`, `[CHAIN] [STAT] ${this.short(clean)} → ${val}`);
+            if (val)
                 return val;
-            }
         }
         catch { /* fall through */ }
         try {
             const v2 = await this.readInvoiceStatusV2Fallback(clean);
-            if (v2 !== 'not-found') {
-                // if (this.debug) this.foldCHAIN.push(`STAT:${this.short(clean)}:${v2}`, `[CHAIN] [STAT] ${this.short(clean)} → ${v2}`);
+            if (v2 !== 'not-found')
                 return v2;
-            }
         }
         catch { /* ignore */ }
         return 'not-found';
@@ -492,15 +617,14 @@ class StacksChainClient {
         const clean = idHex.toLowerCase().replace(/^0x/, '');
         if (!/^[0-9a-f]{64}$/.test(clean))
             return undefined;
-        const keyCv = (0, transactions_2.tupleCV)({ id: (0, transactions_1.bufferCV)(Buffer.from(clean, 'hex')) });
+        const keyCv = (0, transactions_1.tupleCV)({ id: (0, transactions_1.bufferCV)(Buffer.from(clean, 'hex')) });
         const keyHex = (0, transactions_1.cvToHex)(keyCv);
-        const path = `/v2/map_entry/${this.contractAddress}/${this.contractName}/invoices`;
+        const path = `/v2/map_entry/${this.contractAddress}/${this.contractName}/invoices?proof=0`;
         const out = await this.postWithRetry(path, JSON.stringify(keyHex));
         if (!out?.data)
             return undefined;
         const cv = (0, transactions_1.hexToCV)(String(out.data));
         const j = (0, transactions_1.cvToJSON)(cv);
-        // if (this.debug) this.dlog('[map_entry invoices]', String(out.data).slice(0, 18) + '…');
         return j?.value || j;
     }
     async getStxBalance(principal) {
@@ -512,7 +636,6 @@ class StacksChainClient {
         const cv = await this.callReadOnly('get-sbtc', []);
         const j = (0, transactions_1.cvToJSON)(cv);
         const p = (j && j.type === 'optional' && j.value) ? String(j.value) : '';
-        // if (this.debug) this.foldCHAIN.push(`SBTC:${this.short(p)}`, `[CFG] sbtc-token=${p||'unset'}`);
         if (!p.includes('.'))
             return undefined;
         const [contractAddress, contractName] = p.split('.', 2);
@@ -543,7 +666,6 @@ class StacksChainClient {
         };
     }
     // Tip helpers
-    // in StacksChainClient.getTip()
     async getTip() {
         const fetchLatestFromList = async () => {
             const list = await this.getWithRetry('/extended/v1/block', { params: { limit: 1, offset: 0 } });
@@ -552,13 +674,12 @@ class StacksChainClient {
                 throw new Error('getTip: empty block list');
             return { height: Number(first.height), blockHash: String(first.hash) };
         };
-        // ⬇️ wrap the initial /v2/info call
+        // wrap the initial /v2/info call
         let info;
         try {
             info = await this.getWithRetry('/v2/info');
         }
-        catch (e) {
-            // any error (including socket hang up): fallback to list
+        catch {
             return await fetchLatestFromList();
         }
         const height = Number(info?.stacks_tip_height);
@@ -573,7 +694,6 @@ class StacksChainClient {
             return { height, blockHash };
         }
         catch (e) {
-            // still fallback on transient/404
             if (e?.response?.status === 404 || this.transientErr(e)) {
                 return await fetchLatestFromList();
             }
@@ -595,32 +715,26 @@ class StacksChainClient {
                 break;
             }
         }
-        // if (this.debug) this.foldCHAIN.push(`BAL:${principal}:${balanceStr}`, `[BAL] ${principal} ${balanceStr}`);
         return BigInt(balanceStr);
     }
     async getContractCallEvents(params) {
         const contractId = `${this.contractAddress}.${this.contractName}`;
         const basePath = `/extended/v1/contract/${contractId}/events`;
-        // Extended API supports only limit+offset (no from_height)
-        // We'll page and filter client-side by block height.
         const pageLimit = Math.max(1, Math.min(200, params.limit ?? 50));
         const maxPages = Math.max(1, params.maxPages ?? 10);
         const out = [];
         let offset = 0;
         for (let page = 0; page < maxPages; page++) {
             const resp = await this.http.get(basePath, { params: { limit: pageLimit, offset } });
-            // API returns { results: [...] }
             const rows = Array.isArray(resp.data?.results) ? resp.data.results : [];
             if (!rows.length)
                 break;
-            // Filter by height right here; keep only events at/after fromHeight
             for (const ev of rows) {
                 const h = Number(ev?.block_height ?? ev?.tx?.block_height ?? NaN);
                 if (!Number.isFinite(h) || h < params.fromHeight)
                     continue;
                 out.push(ev);
             }
-            // Advance paging; stop when fewer than pageLimit returned
             offset += rows.length;
             if (rows.length < pageLimit)
                 break;
