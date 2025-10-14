@@ -501,7 +501,7 @@ export class ExpressApp {
       ) {
         return CSRFandSecurityMiddleware.disableCsrf()(req, res, next);
       }
-      return CSRFandSecurityMiddleware.csrfProtection()(req, res, next);
+      return (CSRFandSecurityMiddleware.csrfProtection() as unknown as import('express').RequestHandler)(req, res, next);
     });
   }
 

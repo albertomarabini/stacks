@@ -7,7 +7,7 @@
         "start": "node dist/src/server/index.js",
         "dev:debug": "concurrently -k -n srv,cli \"NODE_OPTIONS='--inspect=9229 --enable-source-maps' tsx watch src/server/index.ts\" \"node scripts/build-client.mjs --watch\"",
         "build": "rimraf dist && tsc -p tsconfig.json",
-        "start:dist": "node --inspect=0 dist/server/index.js",
+        "start": "node dist/src/server/index.js",
         "mapping": "node scripts/build-client.mjs --watch"
     },
     "engines": {
