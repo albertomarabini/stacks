@@ -23,6 +23,7 @@ import { ExpressCSPHashManager } from './middleware/ExpressCSPHashManager';
 import { BrandingSSRInjector } from './utils/BrandingSSRInjector';
 import { retrieveUrl } from "./utils/tinyUrlService";
 import path from 'path';
+import { repoPath } from './utils/repoPath';
 import ejsMate from 'ejs-mate';
 
 export class ExpressApp {
@@ -71,8 +72,9 @@ export class ExpressApp {
 
     // Static assets under /static/*
     this.app.use('/static', StaticAssetMiddleware);
+
     if (process.env.AUTH_BYPASS === '1') {
-      this.app.use('/__dev__', express.static(path.join(process.cwd(), 'public', '__dev__')));
+      this.app.use('/__dev__', express.static(repoPath('public', '__dev__')));
     }
     // Register CSRF exemption logic before all route registrations
     this.csrfExemptionMiddleware();
@@ -95,7 +97,7 @@ export class ExpressApp {
       next();
     });
 
-    this.app.set("views", path.join(process.cwd(), "src", "server", "views"));
+    this.app.set('views', repoPath('src', 'server', 'views'));
     this.app.engine('ejs', ejsMate);
     this.app.set('view engine', 'ejs');
 

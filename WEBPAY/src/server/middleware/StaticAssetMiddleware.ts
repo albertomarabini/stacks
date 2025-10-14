@@ -1,10 +1,11 @@
 // src/server/middleware/StaticAssetMiddleware.ts
 import express from 'express';
 import path from 'path';
+import { repoPath } from '../utils/repoPath';
 
 export const StaticAssetMiddleware = express.static(
   // maps request "/static/..." → disk "<repo>/public/static/..."
-  path.resolve(process.cwd(), 'public', 'static'),
+  repoPath('public', 'static'),
   {
     index: false,
     immutable: true,
