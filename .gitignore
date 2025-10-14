@@ -8,3 +8,11 @@
 /--trash--
 
 /WEBPAY/dist
+/bin/clarinet-linux-x64-glibc.tar.gz
+/bin
+/invoices.sqlite
+/WEBPAY/.vscode
+/WEBPAY/node_modules
+/clarity/node_modules
+/WEBPAY/result_files_30-09-25-18_22_42.zip
+/WEBPAY/tinyurls.sqlite
