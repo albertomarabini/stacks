@@ -1,7 +1,7 @@
 ;; Minimal SIP-010-style FT for local testing with sbtc-payment.clar.
 ;; NOTE: SIP-010 uses `transfer` (no "?"). This contract implements only the parts
 ;; the payment contract needs for tests.  :contentReference[oaicite:3]{index=3}
-(impl-trait 'ST2CF5DCN3AJXX2P948GFWGH0BNAVS0KT82YAK9DR.sbtc-payment.ft-trait)
+(impl-trait 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-payment.ft-trait)
 
 ;; --------------------------- State ---------------------------------------
 (define-data-var owner (optional principal) none)

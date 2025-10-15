@@ -285,35 +285,36 @@ export class ApplicationBootstrapper {
     });
 
 
-    if (process.env.AUTO_BOOTSTRAP_ADMIN === '1' && process.env.SIGNER_PRIVATE_KEY) {
-      try {
-        // 1) Admin
-        const adminNow = await chain.readAdminPrincipal();
-        if (!adminNow) {
-          const unsigned = builder.buildBootstrapAdmin();
-          await chain.signAndBroadcast(unsigned, env('SIGNER_PRIVATE_KEY')!);
-          await this.waitFor(() => chain.readAdminPrincipal(), v => !!v);
-          log('BOOTSTRAP', 'on-chain admin set');
-        }
+    // --This must run in the contract--
+    // if (process.env.AUTO_BOOTSTRAP_ADMIN === '1' && process.env.SIGNER_PRIVATE_KEY) {
+    //   try {
+    //     // 1) Admin
+    //     const adminNow = await chain.readAdminPrincipal();
+    //     if (!adminNow) {
+    //       const unsigned = builder.buildBootstrapAdmin();
+    //       await chain.signAndBroadcast(unsigned, env('SIGNER_PRIVATE_KEY')!);
+    //       await this.waitFor(() => chain.readAdminPrincipal(), v => !!v);
+    //       log('BOOTSTRAP', 'on-chain admin set');
+    //     }
 
-        // 2) sBTC token
-        const sbtc = await chain.readSbtcToken();
-        if (!sbtc && env('SBTC_CONTRACT_ADDRESS') && env('SBTC_CONTRACT_NAME')) {
-          const unsigned = builder.buildSetSbtcToken({
-            contractAddress: env('SBTC_CONTRACT_ADDRESS')!,
-            contractName: env('SBTC_CONTRACT_NAME')!,
-          });
-          await chain.signAndBroadcast(unsigned, env('SIGNER_PRIVATE_KEY')!);
-          await this.waitFor(() => chain.readSbtcToken(), v => !!v);
-          log('BOOTSTRAP', 'sbtc-token configured');
-        }
-      } catch (e: any) {
-        // idempotent safety + visibility if it races
-        log('BOOTSTRAP', `skipped or failed: ${e?.message || e}`);
-      }
-    } else {
-      log('BOOTSTRAP', 'skipped (set AUTO_BOOTSTRAP_ADMIN=true and provide SIGNER_PRIVATE_KEY)');
-    }
+    //     // 2) sBTC token
+    //     const sbtc = await chain.readSbtcToken();
+    //     if (!sbtc && env('SBTC_CONTRACT_ADDRESS') && env('SBTC_CONTRACT_NAME')) {
+    //       const unsigned = builder.buildSetSbtcToken({
+    //         contractAddress: env('SBTC_CONTRACT_ADDRESS')!,
+    //         contractName: env('SBTC_CONTRACT_NAME')!,
+    //       });
+    //       await chain.signAndBroadcast(unsigned, env('SIGNER_PRIVATE_KEY')!);
+    //       await this.waitFor(() => chain.readSbtcToken(), v => !!v);
+    //       log('BOOTSTRAP', 'sbtc-token configured');
+    //     }
+    //   } catch (e: any) {
+    //     // idempotent safety + visibility if it races
+    //     log('BOOTSTRAP', `skipped or failed: ${e?.message || e}`);
+    //   }
+    // } else {
+    //   log('BOOTSTRAP', 'skipped (set AUTO_BOOTSTRAP_ADMIN=true and provide SIGNER_PRIVATE_KEY)');
+    // }
 
     const healthCtrl = new HealthController();
 
